@@ -1,0 +1,310 @@
+
+hostname {{ hostname }}
+
+no service pad
+service timestamps debug datetime msec
+service timestamps log datetime msec show-timezone
+service password-encryption
+no ip finger 
+no service dhcp
+no service config
+clock timezone India 5 30
+ip domain-name {{ vtp_domain_name }}
+vtp mode transparent
+spanning-tree mode rapid-pvst
+! 
+!
+!
+!
+logging buffered warnings
+logging buffered 4096
+logging console informational
+logging monitor informational
+logging history informational
+logging source-interface Vlan11
+logging host {{ syslog_server_1_ip }} transport udp port {{ syslog_server_1_port }}
+logging host {{ syslog_server_2_ip }} transport udp port {{ syslog_server_2_port }}
+!
+!
+username {{ local_username }} privilege 1 secret {{ local_secret }}
+enable secret privilege 15 {{ enable_secret }}
+password encryption aes
+aaa new-model
+aaa local authentication attempts max-fail 3
+!
+no ip source-route
+!
+aaa common-criteria policy PASSWORD_POLICY
+ min-length 8
+ max-length 64
+ numeric-count 1
+ upper-case 1
+ lower-case 1
+ special-case 1
+ char-changes 4
+!
+tacacs server ISE_TACACS_{{ ise_psn_1_ip }}
+ address ipv4 {{ ise_psn_1_ip }}
+ key {{ tacacs_psk }}
+ timeout 4
+!
+tacacs server ISE_TACACS_{{ ise_psn_2_ip }}
+ address ipv4 {{ ise_psn_2_ip }}
+ key {{ tacacs_psk }}
+ timeout 4
+!
+radius server ISE_RADIUS_{{ ise_psn_1_ip }}
+ address ipv4 {{ ise_psn_1_ip }} auth-port 1812 acct-port 1813
+ timeout 4
+ retransmit 3
+ automate-tester username dummy ignore-acct-port probe-on
+  pac key {{ radius_psk }}
+!
+radius server ISE_RADIUS_{{ ise_psn_1_ip }}
+ address ipv4 {{ ise_psn_2_ip }} auth-port 1812 acct-port 1813
+ timeout 4
+ retransmit 3
+ automate-tester username dummy ignore-acct-port probe-on
+  pac key {{ radius_psk }}
+!  
+aaa group server radius ISE_RADIUS_GRP
+ server name ISE_RADIUS_{{ ise_psn_1_ip }}
+ server name ISE_RADIUS_{{ ise_psn_1_ip }}
+ ip radius source-interface vlan {{ mgmt_vlan }}
+!
+aaa group server tacacs+ ISE_TACACS_GRP
+ server name ISE_TACACS_{{ ise_psn_1_ip }}
+ server name ISE_TACACS_{{ ise_psn_2_ip }}
+!
+aaa authentication login default local
+aaa authentication login VTY_authen group ISE_TACACS_GRP local
+aaa authentication enable default enable
+aaa authentication dot1x default group ISE_RADIUS_GRP
+aaa authorization config-commands
+aaa authorization exec default local
+aaa authorization exec VTY_author group ISE_TACACS_GRP local if-authenticated
+aaa authorization commands 15 VTY_Cmds group ISE_TACACS_GRP local if-authenticated
+aaa authorization network default group ISE_RADIUS_GRP
+aaa authorization network dnac-cts-list group ISE_RADIUS_GRP
+aaa accounting update newinfo periodic 2880
+aaa accounting identity default start-stop group ISE_RADIUS_GRP
+aaa accounting exec default start-stop group ISE_TACACS_GRP
+aaa accounting commands 15 default start-stop group ISE_TACACS_GRP
+aaa accounting network default start-stop group radius
+aaa accounting system default start-stop group radius
+!         
+!
+login block-for 120 attempts 3 within 30
+
+aaa server radius dynamic-author
+ client {{ radius_psn_1_ip }} server-key 7 {{ radius_psk }}
+ client {{ radius_psn_2_ip }} server-key 7 {{ radius_psk }}
+ 
+ip radius source-interface vlan {{ mgmt_vlan }} 
+!
+ip name-server {{ dns_server_ip_1 }} {{ dns_server_ip_2 }}
+ip domain lookup source-interface vlan{{ mgmt_vlan }}
+ip domain name {{ domain_name }}
+!
+aaa session-id common
+!
+! 
+!
+!
+!
+archive
+ log config
+  logging enable
+  notify syslog contenttype plaintext
+  hidekeys
+
+!
+!
+
+interface vlan {{ mgmg_vlan }}
+ description ## MGMT ##
+ ip address {{ mgmt_vlan_ip }} {{ mgmt_vlan_mask }}
+ no ip redirects
+ no ip unreachables
+ no ip proxy-arp
+!
+no ip routing
+ip default-gateway {{ mgmt_vlan_gw }}
+!
+! 
+!
+ip access-list standard HTTP_ACL
+ 100 deny any
+!
+no ip http server
+no ip http secure-server
+ip http access-class ipv4 HTTP_ACL
+!
+! 
+!
+!
+
+crypto key gen rsa mod 2048
+ip ssh source-interface Vlan {{ mgmg_vlan }}
+ip ssh version 2
+ip ssh server algorithm mac hmac-sha1
+ip ssh server algorithm encryption aes128-ctr aes256-ctr
+ip tacacs source-interface vlan{{ mgmt_vlan }}
+!
+ip access-list extended VTY_ACL
+ permit ip host {{ vty_allowed_ip }} any log
+ deny ip any any
+!
+!
+kron occurrence one-month at 11:59 1 recurring
+ policy-list save
+!
+kron occurrence Backup at 12:00 1 recurring
+ policy-list CONFIGURATION_BACKUP
+!
+kron policy-list save
+ cli write
+!
+kron policy-list CONFIGURATION_BACKUP
+ cli archive config
+!
+!
+snmp-server trap-source Vlan{{ mgmg_vlan }}
+snmp-server location {{ snmp_switch_location }}
+snmp-server group {{ snmp_v3_group }} v3 priv
+snmp-server user {{ snmp_v3_username }} {{ snmp_v3_group }} v3 auth sha {{ snmp_v3_auth_key }} priv aes 128 {{ snmp_v3_priv_key }}
+snmp-server host {{snmp_server_ip_1 }} version 3 priv {{ snmp_v3_username }}
+!
+snmp ifmib ifindex persist
+snmp mib flash cache
+!
+!         
+privilege exec level 7 copy running-config
+privilege exec level 7 copy
+privilege exec level 7 verify
+privilege exec level 7 traceroute
+privilege exec level 7 ping ip
+privilege exec level 7 ping
+privilege exec level 15 configure terminal
+privilege exec level 15 configure
+privilege exec level 7 show ip route
+privilege exec level 7 show ip
+privilege exec level 7 show processes
+privilege exec level 7 show running-config
+privilege exec level 7 show configuration
+privilege exec level 7 show logging
+privilege exec level 7 show
+privilege exec level 7 clear counters
+privilege exec level 7 clear
+!
+!
+!
+
+banner exec ^CC
+          
+************************ W A R N I N G ****************************
+          
+          
+         PRIVATE ELECTRONIC DEVICE - YOU ARE LOGGED IN                   
+          
+          
+                           {{ org_name }}                             
+                     
+          
+          
+   ** Access to this system is PROHIBITED unless AUTHORISED **
+          
+ If you are not authorised please disconnect now. Any attempt for 
+ unauthorized access will be logged and appropriate legal action 
+ will be taken.
+          
+          
+*******************************************************************
+^C
+banner login ^CC
+*===================================================================*
+|                                                                   |
+|                        Important Notice                           |
+|                         =============                             |
+|                                                                   |
+| WARNING: This is {{ org_name }} computer system.                  |
+| It is for authorised users only                                   |
+|                                                                   |
+|                                                                   |
+| It may only be used in accordance with {{ org_name }}'s           |
+|  Computer use Policies and may be subjected to monitoring.        |
+|                                                                   |
+| Anyone found performing unauthorised activities may be subjected  |
+| to disciplinary action including criminal prosecution.            |
+|                                                                   |
+*===================================================================*
+^C
+!
+!
+!
+line con 0
+ exec-timeout 5 0
+
+line vty 0 15
+ access-class VTY_ACL in vrf-also
+ authorization commands 15 VTY_Cmds
+ authorization exec VTY_author
+ login {{ vty_password }}
+ transport preferred none
+ transport input ssh
+ transport output none
+ exec-timeout 5 0
+!
+!
+access-list standard NTP_ACL
+ 10 permit ip {{ ntp_server_ip_1 }}
+ 20 permit ip {{ ntp_server_ip_2 }}
+ 100 deny any
+ntp access-group peer NTP_ACL
+ntp server {{ ntp_server_ip_1 }} source Vlan{{ mgmt_vlan }}
+ntp server {{ ntp_server_ip_2 }} source Vlan{{ mgmt_vlan }}
+!
+!
+!############### INTERFACE TEMPLATES ########################
+
+template FLEX_AP_TEMPLATE
+ switchport trunk allowed vlan {{ flex_ap_allowed_vlans }}
+ switchport trunk native vlan {{ flex_ap_mgmt_vlan }}
+ switchport mode trunk
+
+
+template DOT1x_TEMPLATE_OPEN
+ dot1x pae authenticator
+ dot1x timeout tx-period 7
+ dot1x max-reauth-req 2
+ mab
+ subscriber aging inactivity-timer 60 probe
+ access-session control-direction in
+ access-session host-mode multi-domain
+ access-session port-control auto
+ authentication periodic
+ authentication timer reauthenticate server
+ service-policy type control subscriber DOT1X_MAB_POLICY
+ 
+template DOT1x_TEMPLATE_CLOSED
+ switchport mode access
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+ dot1x pae authenticator
+ dot1x timeout tx-period 7
+ dot1x max-reauth-req 2
+ mab
+ subscriber aging inactivity-timer 60 probe
+ access-session control-direction in
+ access-session host-mode multi-domain
+ access-session closed
+ access-session port-control auto
+ authentication periodic
+ authentication timer reauthenticate server
+ service-policy type control subscriber DOT1X_MAB_POLICY
+ 
+!ACCESSPORT_CONFIG
+interface range Gigabit0/1 - 24
+ switchport access vlan XXX
+ switchport voice vlan YYY
+ source template DOT1x_TEMPLATE_CLOSED

@@ -1,0 +1,427 @@
+!================= {{ DEVICE_TYPE }} CONFIG =============================
+!   {{ DEVICE_MODEL }} CONFIGURAITON SCRIPT FOR {{ORG_NAME }}
+!   BRANCH NAME = {{ BRANCH_NAME }} , BRANCH ID = {{ BRANCH_ID }}
+!========================================================================
+!   [WLC-1]<---RP-Port--->[WCL2]
+!     ||                   ||
+!     ||                   ||
+!     ||====>|CORESW|<=====||
+
+! ============= HA CONFIGURATION ================
+! ================ WLC - 1 ======================
+!
+config t
+!
+ap dot11 24ghz shutdown
+ap dot11 5ghz shutdown
+!
+wireless country IN
+!
+no ap dot11 24ghz shutdown
+no ap dot11 5ghz shutdown
+!
+wr
+!
+redundancy mode sso
+!
+vlan {{ MGMT_VLAN_ID }}
+ name WLC-MGMT
+!
+interface Vlan {{ MGMT_VLAN_ID }}
+ description WLC-MGMT
+ ip address {{ WLC_1_MGMT_VLAN_IP }} {{ WLC_MGMT_VLAN_MASK }}
+ ip address {{ WLC_1_MGMT_VLAN_IP_SEC }} {{ WLC_MGMT_VLAN_MASK }} secondary
+ no shutdown
+!
+ip route 0.0.0.0 0.0.0.0 {{ DEFAULT_ROUTE_NEXTHOP }} name DEFAULT-ROUTE
+!
+wireless management interface {{ MGMT_VLAN_ID }}
+!
+interface range Te0/0/0-1
+    description ---> TO CORE SWITCH
+    channel-group 1 mode active
+    exit
+!
+interface portchannel 1
+    description ---> TO CORE SWITCH
+    switchport mode trunk
+    switchport trunk allowed vlan all
+    no shutdown
+    exit
+! Enable recommended load-balancing algorithm for port-channels:
+port-channel load-balance src-dst-mixed-ip-port
+!
+chassis 1 priority 2
+!
+redun-management interface {{ MGMT_VLAN_ID }} chassis 1 address {{ WLC_1_MGMT_VLAN_IP_SEC }} chassis 2 address {{ WLC_2_MGMT_VLAN_IP_SEC }}
+!
+wr
+!
+reload
+
+!============= WLC - 2 ==========================
+!
+config t
+!
+ap dot11 24ghz shutdown
+ap dot11 5ghz shutdown
+!
+wireless country IN
+!
+no ap dot11 24ghz shutdown
+no ap dot11 5ghz shutdown
+!
+wr
+!
+redundancy mode sso
+!
+vlan {{ MGMT_VLAN_ID }}
+ name WLC-MGMT
+!
+interface Vlan {{ MGMT_VLAN_ID }}
+ description WLC-MGMT
+ ip address {{ WLC_2_MGMT_VLAN_IP }} {{ WLC_MGMT_VLAN_MASK }}
+ ip address {{ WLC_2_MGMT_VLAN_IP_SEC }} {{ WLC_MGMT_VLAN_MASK }} secondary
+ no shutdown
+!
+ip route 0.0.0.0 0.0.0.0 {{ MGMT_VLAN_GW }} name DEFAULT-ROUTE
+!
+wireless management interface {{ MGMT_VLAN_ID }}
+!
+!
+interface range Te0/0/0-1
+    description ---> TO CORE SWITCH
+    channel-group 1 mode active
+    exit
+!
+
+interface portchannel 1
+    description ---> TO CORE SWITCH
+    switchport mode trunk
+    switchport trunk allowed vlan all
+    no shutdown
+    exit
+!
+! Enable recommended load-balancing algorithm for port-channels:
+port-channel load-balance src-dst-mixed-ip-port
+!
+chassis 1 renumber 2
+chassis 2 priority 1
+!
+redun-management interface {{ MGMT_VLAN_ID }} chassis 1 address {{ WLC_1_MGMT_VLAN_IP_SEC }} chassis 2 address {{ WLC_2_MGMT_VLAN_IP_SEC }}
+!
+wr
+!
+reload
+!
+!==============================================================================================================
+!============================================ WLC GENRLAL CONFIG ==============================================
+!==============================================================================================================
+!
+hostname {{ HOSTNAME }}
+service nagle
+no service pad
+no service config
+service tcp-keepalives-in
+service tcp-keepalives-out
+service timestamps debug datetime msec localtime show-timezone
+service timestamps log datetime msec localtime show-timezone
+service sequence-numbers
+service password-encryption
+
+logging discriminator FILTER msg-body drops Configured programmatically by process SEP_webui_wsma_http
+logging buffered discriminator FILTER 16777216 informational
+no logging console
+!
+memory reserve critical 4096
+memory free low-watermark processor 40000
+!
+logging buffered warnings
+logging buffered 4096
+logging console informational
+logging monitor informational
+logging trap informational
+logging history informational
+logging host {{ SYSLOG_SERVER_1_IP }}
+logging host {{ SYSLOG_SERVER_2_IP }}
+!
+clock timezone IST 5 30
+!
+password encryption aes
+!
+!
+aaa common-criteria policy PASSWORD_POLICY
+ min-length 8
+ max-length 64
+ numeric-count 1
+ upper-case 1
+ lower-case 1
+ special-case 1
+ char-changes 4
+!
+username {{ ADMIN_USERNAME }} privilege 1 common-criteria-policy PASSWORD_POLICY algorithm-type sha256 secret {{ ADMIN_SECRET }}
+enable common-criteria-policy PASSWORD_POLICY algorithm-type sha256 secret level 15  {{ ENABLE_SECRET }}
+!
+tacacs server TACACS_{{ TACACS_SRV_1_IP }}
+ address ipv4 {{ TACACS_SRV_1_IP }}
+ key {{ TACACS_PSK }}
+ timeout 4
+!
+tacacs server TACACS_{{ TACACS_SRV_2_IP }}
+ address ipv4 {{ TACACS_SRV_2_IP }}
+ key {{ TACACS_PSK }}
+ timeout 4
+!
+!
+aaa group server tacacs+ TACACS_GRP
+ server name TACACS_{{ TACACS_SRV_1_IP }}
+ server name TACACS_{{ TACACS_SRV_2_IP }}
+!
+!
+ip tacacs source-interface vlan {{ MGMT_VLAN_ID }}
+!
+radius server RADIUS_{{ RADIUS_SRV_1_IP }}
+ address ipv4 {{ RADIUS_SRV_1_IP }} auth-port 1812 acct-port 1813
+ timeout 4
+ retransmit 3
+ automate-tester username dummy ignore-acct-port probe-on
+  pac key {{ RADIUS_PSK }}
+!
+radius server RADIUS_{{ RADIUS_SRV_2_IP }}
+ address ipv4 {{ RADIUS_SRV_2_IP }} auth-port 1812 acct-port 1813
+ timeout 4
+ retransmit 3
+ automate-tester username dummy ignore-acct-port probe-on
+  pac key {{ RADIUS_PSK }}
+!
+ip radius source-interface vlan {{ MGMT_VLAN_ID }}
+!
+aaa group server radius RADIUS_GRP
+ server name RADIUS_{{ RADIUS_SRV_1_IP }}
+ server name RADIUS_{{ RADIUS_SRV_2_IP }}
+ ip radius source-interface vlan {{ MGMT_VLAN_ID }}
+ mac-delimiter colon
+!
+radius-server dead-criteria time 5 tries 3
+radius-server deadtime 3
+!
+aaa authentication dot1x RADIUS_AUTHEN group RADIUS_GRP
+aaa authorization network RADIUS_AUTHOR group RADIUS_GRP
+aaa accounting identity RADIUS_ACCNT start-stop group RADIUS_GRP
+aaa authentication login default local
+aaa authentication login TACACS_AUTHEN group TACACS_GRP local
+aaa authentication enable default enable
+aaa authorization exec default local if-authenticated
+aaa authorization exec TACACS_AUTHOR group TACACS_GRP local if-authenticated
+aaa authorization commands 15 TACACS_CMDS group TACACS_GRP local if-authenticated
+aaa authorization commands 7 TACACS_CMDS group TACACS_GRP local if-authenticated
+aaa authorization console
+aaa accounting update newinfo periodic 2880
+aaa accounting identity default start-stop group RADIUS_GRP
+aaa accounting exec default start-stop group TACACS_GRP
+aaa accounting commands 7 default start-stop group TACACS_GRP
+aaa accounting commands 15 default start-stop group TACACS_GRP
+aaa accounting network default start-stop group RADIUS_GRP
+aaa accounting system default start-stop group RADIUS_GRP
+aaa login display number-failures
+aaa login success-track-conf-time 1
+aaa common-criteria policy PASSWORD_POLICY
+!
+login block-for 120 attempts 3 within 30
+login on-failure log every 1
+login on-success log every 1
+login delay 3
+!
+privilege exec level 7 copy running-config
+privilege exec level 7 copy
+privilege exec level 7 verify
+privilege exec level 7 traceroute
+privilege exec level 7 ping ip
+privilege exec level 7 ping
+privilege exec level 15 configure terminal
+privilege exec level 15 configure
+privilege exec level 7 show ip route
+privilege exec level 7 show ip
+privilege exec level 7 show processes
+privilege exec level 7 show running-config
+privilege exec level 7 show configuration
+privilege exec level 7 show logging
+privilege exec level 7 show
+privilege exec level 7 clear counters
+privilege exec level 7 clear
+!
+crypto key generate rsa modulus 4096 label SSH-4096-RSA-KEY
+ip ssh logging events
+ip ssh version 2
+ip ssh time-out 60
+ip ssh authentication-retries 3
+ip ssh rsa keypair-name SSH-4096-RSA-KEY
+ip ssh server algorithm authentication keyboard
+ip ssh server algorithm kex ecdh-sha2-nistp521 ecdh-sha2-nistp384
+ip ssh server algorithm hostkey rsa-sha2-512 rsa-sha2-256
+ip ssh server algorithm encryption aes256-gcm aes256-ctr
+ip ssh server algorithm mac hmac-sha2-512 hmac-sha2-256
+ip ssh server algorithm publickey ecdsa-sha2-nistp521 ecdsa-sha2-nistp384 rsa-sha2-512
+ip ssh source-interface vlan {{ MGMT_VLAN_ID }}
+
+! If you need to revert to default encryption, use the following commands.
+! default ip ssh server algorithm authentication
+! default ip ssh server algorithm kex
+! default ip ssh server algorithm hostkey
+! default ip ssh server algorithm encryption
+! default ip ssh server algorithm mac
+! default ip ssh server algorithm publickey
+!
+ap tag persistency enable
+!
+ap dot11 5ghz rrm tpc tpcv1-chan-aware
+!
+wireless client vlan-persistent
+!
+device classifier
+!
+wireless mgmt-via-wireless
+!
+ip domain name {{ DOMAIN_NAME }}
+!
+!
+wireless security dot1x identity-request retries 5
+wireless security dot1x identity-request timeout 5
+wireless security dot1x request retries 5
+wireless security dot1x request timeout 5
+!
+ip access-list standard SNMP_ACL
+ permit host {{ SNMP_SERVER_IP_1 }} log
+!
+snmp-server trap-source vlan {{ MGMG_VLAN_ID }}
+snmp-server location {{ BRANCH_NAME }}
+snmp-server group {{ SNMP_V3_GROUP }} v3 priv access SNMP_ACL
+snmp-server user {{ SNMP_V3_USERNAME }} {{ SNMP_V3_GROUP }} v3 auth sha {{ SNMP_V3_KEY }} priv aes 128 {{ snmp_v3_key }}
+snmp-server host {{ SNMP_SERVER_IP_1 }} version 3 priv {{ SNMP_V3_USERNAME }}
+!
+no ip http server
+ip http secure-server
+ip http authentication local
+! === or ====
+ip http authentication aaa login-authentication TACACS_AUTHEN
+ip http authentication aaa exec-authorization TACACS_AUTHOR
+ip http client source-interface {{ MGMT_VLAN_ID }}
+!
+ip access-list standard MGMT_ACL
+ 10 permit 10.0.0.0 0.255.255.255 log
+ 20 permit 172.16.0.0 0.0.31.255 log
+ 39 permit 192.168.0.0 0.0.255.255 log
+ 100 deny log
+!
+ip http access-class ipv4 MGMT_ACL
+!
+ip tacacs source-interface vlan {{ MGMT_VLAN_ID }}
+!
+archive
+ log config
+  logging enable
+  notify syslog contenttype plaintext
+  hidekeys
+!
+kron occurrence DAILY_ONCE at 11:59 1 recurring
+ policy-list SAVE_CONFIG
+!
+kron occurrence Backup at 12:00 1 recurring
+ policy-list CONFIGURATION_BACKUP
+!
+kron policy-list SAVE_CONFIG
+ cli write
+!
+kron policy-list CONFIGURATION_BACKUP
+ cli archive config
+!
+!
+line con 0
+ exec-timeout 15 0
+ logging synchronous
+!
+!
+line vty 0 15
+ access-class MGMT_ACL in vrf-also
+ authorization commands 15 TACACS_CMDS
+ authorization commands 7 TACACS_CMDS
+ authorization exec TACACS_AUTHOR
+ login authentication group TACACS_AUTHEN
+ transport preferred none
+ transport input ssh
+ transport output none
+ exec-timeout 5 0
+ logging synchronous
+!
+!
+banner exec ^
+
+
+|===============================  N O T I C E  ==============================
+|
+|
+|                    YOU HAVE SUCCESSFULLY LOGGED IN TO
+|
+|                          --->>  $(hostname)  <<---
+|                                     on
+|                                 line - $(line)
+|
+|
+|       > THIS SESSION IS BGING MONITORED AND WILL BE REVIEWED
+|         AS PER AUDIT PROCESS
+|
+|       > DO NOT MAKE CHANGES TO THE DEVICE UNLESS APPROVED
+|         BY THE CHANGE ADVISORY BOARD (CAB).
+|
+|
+|============================================================================
+
+
+^
+!
+banner login ^
+
+
+|============================================================================
+|
+|                            W A R N I N G
+|                            =============
+|
+|                        READ BEFORE PROCEEDING
+|
+|
+|         > THIS SYSTEM IS THE PROPERTY OF {{ ORG_NAME }}.
+|
+|         > ACCESS TO THIS SYSTEM IS FOR AUTHORISED USERS ONLY AND
+|           UNAUTHORIZED ACCESS IS PROHIBITED.
+|
+|         > YOUR ACCESS IS MONITORED FOR COMPLIANCE TO IT POLICY.
+|
+|         > UNAUTHORIZED ACCESS WILL RESULT IN ACTION AS PER IT POLICY
+|           AND LAW.
+|
+|
+|============================================================================
+
+
+^
+!
+ntp access-group peer NTP_ACL
+ntp server {{ NTP_SERVER_IP_1 }} source vlan {{ MGMT_VLAN_ID }}
+ntp server {{ NTP_SERVER_IP_2 }} source vlan {{ MGMT_VLAN_ID }}
+!
+access-list standard NTP_ACL
+ 10 permit ip {{ NTP_SERVER_IP_1 }}
+ 20 permit ip {{ NTP_SERVER_IP_2 }}
+ 100 deny any
+!
+
+!
+parameter-map type webauth global
+ type webauth
+ virtual-ip ipv4 192.0.2.1
+ virtual-ip ipv6 2001:DB8::1
+ webauth-http-enable
+ intercept-https-enable
+!
+

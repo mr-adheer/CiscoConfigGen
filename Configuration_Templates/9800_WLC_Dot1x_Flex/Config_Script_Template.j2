@@ -1,0 +1,46 @@
+!================= {{ DEVICE_TYPE }} 802.1x with FLEX CONFIG ============
+!   {{ DEVICE_MODEL }} CONFIGURAITON SCRIPT FOR {{ ORG_NAME }}
+!   BRANCH NAME = {{ BRANCH_NAME }} , BRANCH ID = {{ BRANCH_ID }}
+!========================================================================
+!
+config t
+!
+wlan {{ SSID_1_NAME }}_WLAN_Prof {{ SSID_1_WLAN_ID }} {{ SSID_1_NAME }}
+ security ft
+ security dot1x authentication-list RADIUS_AUTHEN
+ no shutdown
+!
+wireless profile policy {{ SSID_1_NAME }}_{{ SITE_1_NAME  }}_PolicyProf_Flex
+ aaa override
+ no central association
+ no central dhcp
+ no central switching
+ vlan {{ SITE_1_SSID_DEF_VLAN_ID_1 }}
+ dhcp-tlv-caching
+ http-tlv-caching
+ idle-timeout 7200
+ nac
+ radius-profiling
+ session-timeout 43200
+ no shutdown
+!
+wireless profile flex {{ SITE_1_NAME  }}_Flex-Prof
+ native-vlan-id {{ SITE_1_AP_MGMT_VLAN_ID }}
+ vlan-name {{ SITE_1_VLAN_NAME_1 }}
+  vlan-id {{ SITE_1_VLAN_ID_1 }}
+ vlan-name {{ SITE_1_VLAN_NAME_2 }}
+  vlan-id {{ SITE_1_VLAN_ID_2 }}
+
+!
+wireless tag policy {{ SITE_1_NAME  }}_Pol_Tag
+ wlan {{ SSID_1_NAME }}_WLAN_Prof policy {{ SSID_1_NAME }}_{{ SITE_1_NAME  }}_PolicyProf_Flex
+!
+wireless tag site {{ SITE_1_NAME  }}_Site_Tag
+ no local-site
+ flex-profile {{ SITE_1_NAME  }}_Flex-Prof
+!
+!======= APPLY TAGS TO ACCESS POINTS - SAMPLE GIVEN BELOW ======
+!
+ap aaaa.aaaa.aaaa
+ policy-tag  {{ SITE_1_NAME }}_Pol_Tag
+ site-tag {{ SITE_1_NAME }}_Site_Tag

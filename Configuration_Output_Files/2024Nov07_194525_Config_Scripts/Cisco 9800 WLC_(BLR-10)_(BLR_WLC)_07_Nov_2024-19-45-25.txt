@@ -1,0 +1,42 @@
+!================= Cisco 9800 WLC 802.1x with FLEX CONFIG ============
+!   C9800-CL CONFIGURAITON SCRIPT FOR VSPL
+!   BRANCH NAME = BLR , BRANCH ID = 10
+!========================================================================
+!
+wlan CORP_SSID_WLAN_Prof 1 CORP_SSID
+ security ft
+ security dot1x authentication-list RADIUS_AUTHEN
+ no shutdown
+!
+wireless profile policy CORP_SSID_HO_BLD_PolicyProf_Flex
+ aaa override
+ no central association
+ no central dhcp
+ no central switching
+ vlan 10
+ dhcp-tlv-caching
+ http-tlv-caching
+ idle-timeout 7200
+ nac
+ radius-profiling
+ session-timeout 43200
+ no shutdown
+!
+wireless profile flex HO_BLD_Flex-Prof
+ native-vlan-id 100
+ vlan-name corp_vlan
+  vlan-id 200
+ vlan-name guest
+  vlan-id 202
+
+!
+wireless tag policy HO_BLD_Pol_Tag
+ wlan CORP_SSID_WLAN_Prof policy CORP_SSID_HO_BLD_PolicyProf_Flex
+!
+wireless tag site HO_BLD_Site_Tag
+ no local-site
+ flex-profile HO_BLD_Flex-Prof
+!
+ap aaaa.aaaa.aaaa
+ policy-tag  HO_BLD_Pol_Tag
+ site-tag HO_BLD_Site_Tag

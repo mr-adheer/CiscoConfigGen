@@ -1,0 +1,82 @@
+!================= {{ DEVICE_TYPE }} CONFIG =============================
+!   {{ DEVICE_MODEL }} CONFIGURAITON SCRIPT FOR {{ORG_NAME }}
+!   BRANCH NAME = {{ BRANCH_NAME }} , BRANCH ID = {{ BRANCH_ID }}
+!========================================================================
+
+pnpa service discovery stop
+!
+config-t
+!
+config-transaction
+ system
+ system-ip {{ SYS_IP }}
+ site-id {{ BRANCH_ID }}
+ organization-name "{{ SDWAN_ORG_NAME }}"
+ vbond {{ VBOND_FQDN }}
+!
+hostname {{ HOSTNAME }}
+!
+username {{ LOCAL_USER }} privelege 15 {{ LOCAL_SECRET }}
+!
+enable secret {{ ENABLE_SECRET }}
+!
+interface {{ WAN_INTERFACE_1_ID }}
+ description {{ WAN_INTERFACE_1_DESCRIPTION }}
+ ip address {{ WAN_INTERFACE_1_IP }} {{ WAN_INTERFACE_1_MASK }}
+ no shutdown
+ exit
+!
+interface {{ WAN_INTERFACE_2_ID }}
+ description {{ WAN_INTERFACE_2_DESCRIPTION }}
+ ip address {{ WAN_INTERFACE_2_IP }} {{ WAN_INTERFACE_2_MASK }}
+ no shutdown
+ exit
+!
+interface {{ LAN_INTERFACE_1_ID }}
+ description {{ LAN_INTERFACE_1_DESCRIPTION }}
+ ip address {{ LAN_INTERFACE_1_IP }} {{ LAN_INTERFACE_1_MASK }}
+ no shutdown
+ exit
+! 
+interface Tunnel1
+ no shutdown
+ ip unnumbered {{ WAN_INTERFACE_1_ID }}
+ tunnel source {{ WAN_INTERFACE_1_ID }}
+ tunnel mode sdwan
+ exit
+!
+interface Tunnel2
+ no shutdown
+ ip unnumbered {{ WAN_INTERFACE_2_ID }}
+ tunnel source {{ WAN_INTERFACE_2_ID }}
+ tunnel mode sdwan
+ exit
+!
+sdwan
+ interface {{ WAN_INTERFACE_1_ID }}
+  tunnel-interface
+  encapsulation ipsec
+  color {{ WAN_INTERFACE_1_COLOR }}
+  exit
+ !
+ interface {{ WAN_INTERFACE_2_ID }}
+  tunnel-interface
+  encapsulation ipsec
+  color {{ WAN_INTERFACE_2_COLOR }}
+ exit
+ exit
+!
+ip route 0.0.0.0 0.0.0.0 {{ WAN_INTERFACE_1_GW_IP }}
+ip route 0.0.0.0 0.0.0.0 {{ WAN_INTERFACE_2_GW_IP }}
+!
+ip domain lookup
+ip name-server {{ DNS_SERVER1_IP }} {{ DNS_SERVER2_IP }}
+!
+router bgp {{WAN_1_BGP_ASN}}
+ bgp log-neighbor-changes
+ no synchronization
+ no auto-summary
+ router-id {{LAN_INTERFACE_1_IP}}
+ neighbor {{WAN_INTERFACE_1_GW_IP}} remote-as {{WAN_1_BGP_REMOTE_ASN}}
+!
+

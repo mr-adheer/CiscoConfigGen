@@ -1,0 +1,81 @@
+!================= C1121-4P_SDWAN_RTR CONFIG =============================
+!    CONFIGURAITON SCRIPT FOR MANAPPURAM
+!   BRANCH NAME = MUMBAI_DC , BRANCH ID = 100
+!=========================================================================
+
+pnpa service discovery stop
+!
+config-t
+!
+config-transaction
+ system
+ system-ip 10.10.10.1
+ site-id 100
+ organization-name "MANAPPURAM.COM"
+ vbond VBOND.MAP.COM
+!
+hostname MUMBAI_DC
+!
+username CISCO privelege 15 
+!
+enable secret CISCO@123
+!
+interface GIGABITETHERNET1/1
+ description *** INTERNET LINK ***
+ ip address 1.1.1.1 255.255.255.252
+ no shutdown
+ exit
+!
+interface GIGABITETHERNET1/2
+ description *** MPLS LINK ***
+ ip address 10.10.10.1 255.255.255.252
+ no shutdown
+ exit
+!
+interface GIGABITETHERNET 1/1/1
+ description *** LAN ***
+ ip address 192.168.1.1 255.255.255.0
+ no shutdown
+ exit
+! 
+interface Tunnel1
+ no shutdown
+ ip unnumbered GIGABITETHERNET1/1
+ tunnel source GIGABITETHERNET1/1
+ tunnel mode sdwan
+ exit
+!
+interface Tunnel2
+ no shutdown
+ ip unnumbered GIGABITETHERNET1/2
+ tunnel source GIGABITETHERNET1/2
+ tunnel mode sdwan
+ exit
+!
+sdwan
+ interface GIGABITETHERNET1/1
+  tunnel-interface
+  encapsulation ipsec
+  color INTERNET
+  exit
+ !
+ interface GIGABITETHERNET1/2
+  tunnel-interface
+  encapsulation ipsec
+  color MPLS
+ exit
+ exit
+!
+ip route 0.0.0.0 0.0.0.0 1.1.1.2
+ip route 0.0.0.0 0.0.0.0 10.10.10.2
+!
+ip domain lookup
+ip name-server 8.8.8.8 4.2.2.2
+!
+router bgp 65505
+ bgp log-neighbor-changes
+ no synchronization
+ no auto-summary
+ router-id 192.168.1.1
+ neighbor 1.1.1.2 remote-as 65006
+!

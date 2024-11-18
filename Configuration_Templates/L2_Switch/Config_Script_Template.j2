@@ -2,9 +2,9 @@
 !   {{ DEVICE_MODEL }} CONFIGURAITON SCRIPT FOR {{ORG_NAME }}
 !   BRANCH NAME = {{ BRANCH_NAME }} , BRANCH ID = {{ BRANCH_ID }}
 !========================================================================
-
+!
 hostname {{ HOSTNAME }}
-
+!
 no service pad
 service timestamps debug datetime msec
 service timestamps log datetime msec show-timezone
@@ -296,7 +296,6 @@ line vty 0 15
  transport output none
  exec-timeout 5 0
  logging synchronous
-
 !
 !
 access-list standard NTP_ACL
@@ -316,6 +315,7 @@ service-template CRITICAL_DATA_ACCESS
 service-template CRITICAL_VOICE_ACCESS
     voice vlan
 ! -------------------- CLASS MAP ----------------------------------
+!
 class-map type control subscriber match-all AAA_SVR_DOWN_AUTHD_HOST
     match result-type aaa-timeout
     match authorization-status authorized
@@ -404,7 +404,7 @@ policy-map type control subscriber DOT1X_MAB_POLICY
             10 authentication-restart 60
 !
 !############### INTERFACE TEMPLATES ########################
-
+!
 template FLEX_AP_TEMPLATE
  description ---> AP PORT
  switchport trunk allowed vlan {{ FLEX_AP_ALLOWED_VLANS }}
@@ -481,7 +481,7 @@ template ACCESS_TEMPLATE_NOAUTH
  switchport port-security
  switchport port-security maximum 2
  switchport port-security violation restrict
-
+!
 !===== ACCESS_PORT_CONFIG =====
 !
 interface range Gigabit0/1 - 24

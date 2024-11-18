@@ -15,7 +15,6 @@ service sequence number
 no ip finger 
 no service dhcp
 no service config
-clock timezone India 5 30
 ip domain-name {{ VTP_DOMAIN_NAME }}
 vtp mode transparent
 spanning-tree mode rapid-pvst
@@ -416,6 +415,11 @@ template UPLINK_TEMPLATE
  description ---> UPLINK PORT
  switchport mode trunk
  switchport trunk allowed vlan all
+ storm-control broadcast level 10
+ storm-control multicast level 10
+ udld mode aggressive
+ spanning-tree guard loop
+ 
 !
 template DOT1x_TEMPLATE_OPEN
  description ---> ACCESS PORT OPEN AUTH
@@ -431,9 +435,12 @@ template DOT1x_TEMPLATE_OPEN
  authentication periodic
  authentication timer reauthenticate server
  load-interval 60
- storm-control broadcast level 10
- storm-control multicast level 10
+ storm-control broadcast level 1
+ storm-control multicast level 1
  storm-control action trap
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security violation restrict
  service-policy type control subscriber DOT1X_MAB_POLICY
 !
 template DOT1x_TEMPLATE_CLOSED
@@ -453,9 +460,12 @@ template DOT1x_TEMPLATE_CLOSED
  authentication periodic
  authentication timer reauthenticate server
  load-interval 60
- storm-control broadcast level 10
- storm-control multicast level 10
+ storm-control broadcast level 1
+ storm-control multicast level 1
  storm-control action trap
+ switchport port-security
+ switchport port-security maximum 2
+ switchport port-security violation restrict
  service-policy type control subscriber DOT1X_MAB_POLICY
 !
 template ACCESS_TEMPLATE_NOAUTH
@@ -465,8 +475,8 @@ template ACCESS_TEMPLATE_NOAUTH
  spanning-tree bpduguard enable
  subscriber aging inactivity-timer 60 probe
  load-interval 60
- storm-control broadcast level 10
- storm-control multicast level 10
+ storm-control broadcast level 1
+ storm-control multicast level 1
  storm-control action trap
  switchport port-security
  switchport port-security maximum 2

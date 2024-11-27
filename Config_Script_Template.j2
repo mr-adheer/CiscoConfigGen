@@ -12,7 +12,7 @@ service password-encryption
 service tcp-keepalives-in
 service tcp-keepalives-out
 service sequence-numbers
-no ip finger 
+no ip finger
 no service dhcp
 no service config
 software auto-upgrade enable
@@ -116,7 +116,7 @@ aaa accounting system default start-stop group RADIUS_GRP
 aaa authorization console
 aaa login display number-failures
 aaa login success-track-conf-time 1
-!         
+!
 !
 login block-for 120 attempts 3 within 30
 login on-failure log every 1
@@ -292,7 +292,7 @@ spanning-tree mode rapid-pvst
 spanning-tree extend system-id
 spanning-tree portfast bpduguard default
 spanning-tree loopguard default
-!         
+!
 privilege exec level 7 copy running-config
 privilege exec level 7 copy
 privilege exec level 7 verify
@@ -397,9 +397,13 @@ access-list standard NTP_ACL
  100 deny any
  exit
 !
+ntp authentication-key 2 md5 {{ NTP_KEY }}
+ntp authenticate
+ntp trusted-key 2
+
 ntp access-group peer NTP_ACL
-ntp server {{ NTP_SERVER_IP_1 }} source vlan {{ MGMT_VLAN_ID }}
-ntp server {{ NTP_SERVER_IP_2 }} source vlan {{ MGMT_VLAN_ID }}
+ntp server {{ NTP_SERVER_IP_1 }} key 2 source vlan {{ MGMT_VLAN_ID }}
+ntp server {{ NTP_SERVER_IP_2 }} key 2 source vlan {{ MGMT_VLAN_ID }}
 !
 !
 !
@@ -634,6 +638,7 @@ interface range Gigabit0/1 - 24
     ! example: description -> ACCESS --> MPLS_RTR1 | 10.1.1.1 -> G0/0
  switchport access vlan XXX
  switchport voice vlan YYY
+ ip arp inspection trust
  source template ACCESS_DOT1X_MAB_CLOSED
 !
 !
@@ -646,6 +651,7 @@ interface range Gigabit0/25
  switchport mode trunk
  switchport trunk allowed vlan <vlan list>
  udld mode aggressive
+ ip arp inspection trust
  source template TRUNK_UPLINK
 !
 !
@@ -674,7 +680,7 @@ interface range Gigabit0/26
     ! example : description  ** TRUNK --> 3RDFLR_SW | 10.10.10.2 -> Gig1/0/3
  udld mode aggressive
  channel-group 10 mode active
-
+!
 !
 interface port-channel 10
  description  ** <LinkType> -->  <Neighbor_Name> | <Neighbor_IP> -> <Neighbor_Interface>

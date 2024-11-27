@@ -6,8 +6,8 @@
 hostname {{ HOSTNAME }}
 !
 no service pad
-service timestamps debug datetime msec
-service timestamps log datetime msec show-timezone
+service timestamps debug datetime msec localtime show-timezone
+service timestamps log datetime msec localtime show-timezone
 service password-encryption
 service tcp-keepalives-in
 service tcp-keepalives-out
@@ -15,15 +15,12 @@ service sequence number
 no ip finger 
 no service dhcp
 no service config
-ip domain-name {{ VTP_DOMAIN_NAME }}
-vtp mode transparent
-spanning-tree mode rapid-pvst
 software auto-upgrade enable
 !
 memory reserve console 4096
 !
 logging buffered warnings
-logging buffered 4096
+logging buffered 64000
 logging console informational
 logging monitor informational
 logging trap informational
@@ -31,6 +28,9 @@ logging history informational
 logging source-interface vlan {{ MGMG_VLAN_ID }}
 logging host {{ SYSLOG_SERVER_1_IP }}
 logging host {{ SYSLOG_SERVER_2_IP }}
+!
+ip domain-name {{ VTP_DOMAIN_NAME }}
+vtp mode transparent
 !
 clock timezone IST 5 30
 !
@@ -75,14 +75,14 @@ radius server RADIUS_{{ RADIUS_SRV_1_IP }}
  address ipv4 {{ RADIUS_SRV_1_IP }} auth-port 1812 acct-port 1813
  timeout 4
  retransmit 3
- automate-tester username dummy ignore-acct-port probe-on
+ automate-tester username TESTUSER ignore-acct-port probe-on
   pac key {{ RADIUS_PSK }}
 !
 radius server RADIUS_{{ RADIUS_SRV_2_IP }}
  address ipv4 {{ RADIUS_SRV_2_IP }} auth-port 1812 acct-port 1813
  timeout 4
  retransmit 3
- automate-tester username dummy ignore-acct-port probe-on
+ automate-tester username TESTUSER ignore-acct-port probe-on
   pac key {{ RADIUS_PSK }}
 !
 ip radius source-interface vlan {{ MGMT_VLAN_ID }}
@@ -94,7 +94,7 @@ aaa group server radius RADIUS_GRP
 !
 aaa authentication login default local
 aaa authentication login TACACS_AUTHEN group TACACS_GRP local
-aaa authentication enable default enable
+aaa authentication enable default group TACACS_GRP enable
 aaa authentication dot1x default group RADIUS_GRP
 aaa authorization config-commands
 aaa authorization exec default local
@@ -102,12 +102,13 @@ aaa authorization exec TACACS_AUTHOR group TACACS_GRP local if-authenticated
 aaa authorization commands 15 TACACS_CMDS group TACACS_GRP local if-authenticated
 aaa authorization network default group RADIUS_GRP
 aaa authorization network dnac-cts-list group RADIUS_GRP
+aaa authorization auth-proxy default group RADIUS_GRP
 aaa accounting update newinfo periodic 2880
 aaa accounting identity default start-stop group RADIUS_GRP
 aaa accounting exec default start-stop group TACACS_GRP
 aaa accounting commands 15 default start-stop group TACACS_GRP
-aaa accounting network default start-stop group radius
-aaa accounting system default start-stop group radius
+aaa accounting network default start-stop group RADIUS_GRP
+aaa accounting system default start-stop group RADIUS_GRP
 aaa authorization console
 aaa login display number-failures
 aaa login success-track-conf-time 1
@@ -125,6 +126,17 @@ aaa server radius dynamic-author
 ip name-server {{ DNS_SERVER_IP_1 }} {{ DNS_SERVER_IP_2 }}
 ip domain lookup source-interface vlan {{ MGMT_VLAN_ID }}
 ip domain name {{ DOMAIN_NAME }}
+!
+radius-server vsa send authentication
+radius-server vsa send accounting
+radius-server attribute 6 on-for-login-auth
+radius-server attribute 6 support-multiple
+radius-server attribute 8 include-in-access-req
+radius-server attribute 25 access-request include
+radius-server attribute 31 mac format ietf upper-case
+radius-server attribute 31 send nas-port-detail mac-only
+radius-server dead-criteria time 5 tries 3
+radius-server load-balance method least-outstanding
 !
 aaa session-id common
 !
@@ -153,9 +165,58 @@ no ip http server
 no ip http secure-server
 ip http access-class ipv4 HTTP_ACL
 !
-! 
+!
+device-tracking tracking auto-source
+!
+device-tracking policy IPDT_POLICY
+ no protocol udp
+ tracking enable
+!
+device-sensor filter-list cdp list CDP_LIST
+ tlv name device-name
+ tlv name address-type
+ tlv name capabilities-type
+ tlv name platform-type
+ exit
+!
+device-sensor filter-spec cdp include list CDP_LIST
+!
+device-sensor filter-list lldp list LLDP_LIST
+ tlv name system-name
+ tlv name system-description
+!
+device-sensor filter-spec lldp include list LLDP_LIST
+!
+!
+device-sensor filter-list dhcp list DHCP_LIST
+ option name host-name
+ option name default-ip-ttl
+ option name requested-address
+ option name parameter-request-list
+ option name class-identifier
+ option name client-identifier
+!
+device-sensor filter-spec dhcp include list DHCP_LIST
+!
+device-sensor accounting
+device-sensor notify all-changes
+!
 errordisable recovery cause all
 !
+cdp run
+lldp run
+!
+access-session attributes filter-list list Def_Acct_List
+ cdp
+ lldp
+ dhcp
+ http
+!
+access-session accounting attributes filter-spec include list Def_Acct_List
+!
+!
+no macro auto monitor
+access-session template monitor
 !
 crypto key generate rsa modulus 4096 label SSH-4096-RSA-KEY
 ip ssh logging events
@@ -203,6 +264,12 @@ snmp-server host {{ SNMP_SERVER_IP_1 }} version 3 priv {{ SNMP_V3_USERNAME }}
 snmp ifmib ifindex persist
 snmp mib flash cache
 !
+udld aggressive
+!
+spanning-tree mode rapid-pvst
+!
+spanning-tree extended system-id
+spanning-tree portfast edge bpduguard enable
 !         
 privilege exec level 7 copy running-config
 privilege exec level 7 copy
@@ -236,7 +303,7 @@ banner exec ^
 |===============================  N O T I C E  ==============================
 |
 |
-|                YOU ARE LOGGED IN to {{ ORG_NAME }}'S DEVICE
+|          YOU ARE LOGGED IN TO DEVICE THAT BELONGS TO {{ ORG_NAME }}
 |
 |
 |          ------>>   $(hostname) on line-VTY/TTY $(line)  <<-------
@@ -260,10 +327,10 @@ banner login ^
 
 |============================================================================
 |
-|                            W A R N I N G
-|                            =============
+|                          W A R N I N G
+|                          =============
 |
-|                        READ BEFORE PROCEEDING
+|                      READ BEFORE PROCEEDING
 |
 |
 |         THIS SYSTEM IS THE PROPRITORY OF {{ ORG_NAME }}.
@@ -284,10 +351,12 @@ banner login ^
 !
 line con 0
  exec-timeout 5 0
+ login authentication default
  logging synchronous
 !
 line vty 0 15
  access-class MGMT_ACL in vrf-also
+ login authentication TACACS_AUTHEN
  authorization commands 15 TACACS_CMDS
  authorization exec TACACS_AUTHOR
  login {{ VTY_PASSWORD }}
@@ -310,6 +379,15 @@ ntp server {{ NTP_SERVER_IP_2 }} source vlan {{ MGMT_VLAN_ID }}
 !
 !
 !========================== IBNS2.0 =================================
+!
+!
+authentication convert-to new-style
+!
+dot1x system-auth-control
+dot1x critical eaopl
+authentication critical recovery delay 2000
+no access-session mac-move deny
+access-session acl default passthrough
 !
 service-template CRITICAL_DATA_ACCESS
 service-template CRITICAL_VOICE_ACCESS
@@ -410,16 +488,10 @@ template FLEX_AP_TEMPLATE
  switchport trunk allowed vlan {{ FLEX_AP_ALLOWED_VLANS }}
  switchport trunk native vlan {{ FLEX_AP_MGMT_VLAN_ID }}
  switchport mode trunk
-!
-template UPLINK_TEMPLATE
- description ---> UPLINK PORT
- switchport mode trunk
- switchport trunk allowed vlan all
+ switchport nonegotiate
  storm-control broadcast level 10
  storm-control multicast level 10
- udld mode aggressive
- spanning-tree guard loop
- 
+ storm-control action trap
 !
 template DOT1x_TEMPLATE_OPEN
  description ---> ACCESS PORT OPEN AUTH
@@ -442,6 +514,7 @@ template DOT1x_TEMPLATE_OPEN
  switchport port-security maximum 2
  switchport port-security violation restrict
  service-policy type control subscriber DOT1X_MAB_POLICY
+ device-tracking attach-policy IPDT_POLICY
 !
 template DOT1x_TEMPLATE_CLOSED
  description ---> ACCESS PORT CLOSED AUTH
@@ -450,7 +523,7 @@ template DOT1x_TEMPLATE_CLOSED
  spanning-tree bpduguard enable
  dot1x pae authenticator
  dot1x timeout tx-period 7
- dot1x max-reauth-req 2
+ dot1x max-reauth-req 3
  mab
  subscriber aging inactivity-timer 60 probe
  access-session control-direction in
@@ -467,6 +540,7 @@ template DOT1x_TEMPLATE_CLOSED
  switchport port-security maximum 2
  switchport port-security violation restrict
  service-policy type control subscriber DOT1X_MAB_POLICY
+ device-tracking attach-policy IPDT_POLICY
 !
 template ACCESS_TEMPLATE_NOAUTH
  description ---> ACCESS PORT NO AUTH
@@ -481,10 +555,33 @@ template ACCESS_TEMPLATE_NOAUTH
  switchport port-security
  switchport port-security maximum 2
  switchport port-security violation restrict
+ device-tracking attach-policy IPDT_POLICY
 !
 !===== ACCESS_PORT_CONFIG =====
 !
 interface range Gigabit0/1 - 24
  switchport access vlan XXX
  switchport voice vlan YYY
+ device-tracking attach-policy IPDT_POLICY
  source template DOT1x_TEMPLATE_CLOSED
+
+
+!===== UPLINK_PORT_CONFIG =====
+!
+interface range Gigabit0/25
+ description ---> UPLINK PORT
+ switchport mode trunk
+ switchport trunk allowed vlan <vlan list>
+ storm-control broadcast level 10
+ storm-control multicast level 10
+ udld mode aggressive
+ load-interval 60
+ spanning-tree guard loop
+ storm-control action trap
+
+==== STORM CONTROL VALUES ===
+ 1Gig (Access= 1), (uplink = 10)
+ 10Gig = 1
+ 25Gig = 0.5
+ 40G = 0.5
+ 100G = 0.5

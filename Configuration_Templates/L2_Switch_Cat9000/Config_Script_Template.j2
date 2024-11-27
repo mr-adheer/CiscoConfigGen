@@ -11,7 +11,7 @@ service timestamps log datetime msec localtime show-timezone
 service password-encryption
 service tcp-keepalives-in
 service tcp-keepalives-out
-service sequence number
+service sequence-numbers
 no ip finger 
 no service dhcp
 no service config
@@ -21,15 +21,15 @@ memory reserve console 4096
 !
 logging buffered warnings
 logging buffered 64000
-logging console informational
+logging console warnings
 logging monitor informational
 logging trap informational
 logging history informational
-logging source-interface vlan {{ MGMG_VLAN_ID }}
-logging host {{ SYSLOG_SERVER_1_IP }}
-logging host {{ SYSLOG_SERVER_2_IP }}
+logging source-interface vlan {{ MGMT_VLAN_ID }}
+logging host {{ SYSLOG_SERVER_1_IP }} transport udp port {{ SYSLOG_SERVER_1_PORT }}
+logging host {{ SYSLOG_SERVER_2_IP }} transport udp port {{ SYSLOG_SERVER_2_PORT }}
 !
-ip domain-name {{ VTP_DOMAIN_NAME }}
+ip domain name {{ VTP_DOMAIN_NAME }}
 vtp mode transparent
 !
 clock timezone IST 5 30
@@ -46,10 +46,11 @@ aaa common-criteria policy PASSWORD_POLICY
  special-case 1
  char-changes 4
 !
-username {{ ADMIN_USERNAME }} privilege 1 common-criteria-policy PASSWORD_POLICY algorithm-type sha256 secret {{ ADMIN_SECRET }}
+username {{ LOCAL_USERNAME }} privilege 1 common-criteria-policy PASSWORD_POLICY algorithm-type sha256 secret {{ LOCAL_SECRET }}
 enable common-criteria-policy PASSWORD_POLICY algorithm-type sha256 secret level 15  {{ ENABLE_SECRET }}
 !
 aaa new-model
+authentication convert-to new-style
 !
 no ip source-route
 !
@@ -57,16 +58,19 @@ tacacs server TACACS_{{ TACACS_SRV_1_IP }}
  address ipv4 {{ TACACS_SRV_1_IP }}
  key {{ TACACS_PSK }}
  timeout 4
+ exit
 !
 tacacs server TACACS_{{ TACACS_SRV_2_IP }}
  address ipv4 {{ TACACS_SRV_2_IP }}
  key {{ TACACS_PSK }}
  timeout 4
+ exit
 !
 !
 aaa group server tacacs+ TACACS_GRP
  server name TACACS_{{ TACACS_SRV_1_IP }}
  server name TACACS_{{ TACACS_SRV_2_IP }}
+ exit
 !
 !
 ip tacacs source-interface vlan {{ MGMT_VLAN_ID }}
@@ -120,8 +124,9 @@ login on-success log every 1
 login delay 3
 !
 aaa server radius dynamic-author
- client {{ RADIUS_SRV_1_IP }} server-key 7 {{ RADIUS_PSK }}
- client {{ RADIUS_SRV_2_IP }} server-key 7 {{ RADIUS_PSK }}
+ client {{ RADIUS_SRV_1_IP }} server-key {{ RADIUS_PSK }}
+ client {{ RADIUS_SRV_2_IP }} server-key {{ RADIUS_PSK }}
+ exit
 !
 ip name-server {{ DNS_SERVER_IP_1 }} {{ DNS_SERVER_IP_2 }}
 ip domain lookup source-interface vlan {{ MGMT_VLAN_ID }}
@@ -148,18 +153,21 @@ archive
   hidekeys
 !
 !
-interface vlan {{ MGMG_VLAN_ID }}
- description ----> MGMT
+interface vlan {{ MGMT_VLAN_ID }}
+ description == SVI - MGMT ==
  ip address {{ MGMT_VLAN_IP }} {{ MGMT_VLAN_MASK }}
  no ip redirects
  no ip unreachables
  no ip proxy-arp
+ no shutdown
+ exit
 !
 no ip routing
 ip default-gateway {{ MGMT_VLAN_GW }}
 !
 ip access-list standard HTTP_ACL
- 100 deny any
+ 100 deny any log
+ exit
 !
 no ip http server
 no ip http secure-server
@@ -169,8 +177,8 @@ ip http access-class ipv4 HTTP_ACL
 device-tracking tracking auto-source
 !
 device-tracking policy IPDT_POLICY
- no protocol udp
  tracking enable
+ exit
 !
 device-sensor filter-list cdp list CDP_LIST
  tlv name device-name
@@ -184,6 +192,7 @@ device-sensor filter-spec cdp include list CDP_LIST
 device-sensor filter-list lldp list LLDP_LIST
  tlv name system-name
  tlv name system-description
+ exit
 !
 device-sensor filter-spec lldp include list LLDP_LIST
 !
@@ -195,13 +204,15 @@ device-sensor filter-list dhcp list DHCP_LIST
  option name parameter-request-list
  option name class-identifier
  option name client-identifier
+ exit
 !
 device-sensor filter-spec dhcp include list DHCP_LIST
 !
 device-sensor accounting
 device-sensor notify all-changes
 !
-errordisable recovery cause all
+errdisable recovery cause all
+errdisable recovery interval 300
 !
 cdp run
 lldp run
@@ -211,12 +222,12 @@ access-session attributes filter-list list Def_Acct_List
  lldp
  dhcp
  http
+ exit
 !
 access-session accounting attributes filter-spec include list Def_Acct_List
 !
 !
 no macro auto monitor
-access-session template monitor
 !
 crypto key generate rsa modulus 4096 label SSH-4096-RSA-KEY
 ip ssh logging events
@@ -230,35 +241,45 @@ ip ssh server algorithm hostkey rsa-sha2-512 rsa-sha2-256
 ip ssh server algorithm encryption aes256-gcm aes256-ctr
 ip ssh server algorithm mac hmac-sha2-512 hmac-sha2-256
 ip ssh server algorithm publickey ecdsa-sha2-nistp521 ecdsa-sha2-nistp384 rsa-sha2-512
-ip ssh source-interface Vlan {{ MGMG_VLAN_ID }}
+ip ssh source-interface Vlan {{ MGMT_VLAN_ID }}
 !
 ip access-list standard MGMT_ACL
  10 permit 10.0.0.0 0.255.255.255 log
  20 permit 172.16.0.0 0.0.31.255 log
  39 permit 192.168.0.0 0.0.255.255 log
  100 deny any log
+ exit
 !
+ip dhcp snooping
+ip dhcp snooping vlan number 1-4094
+!
+ip arp inspection vlan 1-4094
 !
 kron occurrence one-month at 11:59 1 recurring
  policy-list save
+ exit
 !
 kron occurrence Backup at 12:00 1 recurring
  policy-list CONFIGURATION_BACKUP
+ exit
 !
 kron policy-list save
  cli write
+ exit
 !
 kron policy-list CONFIGURATION_BACKUP
  cli archive config
+ exit
 !
 !
 ip access-list standard SNMP_ACL
  permit host {{ SNMP_SERVER_IP_1 }} log
+ exit
 !
-snmp-server trap-source vlan {{ MGMG_VLAN_ID }}
+snmp-server trap-source vlan {{ MGMT_VLAN_ID }}
 snmp-server location {{ SNMP_LOCATION }}
 snmp-server group {{ SNMP_V3_GROUP }} v3 priv access SNMP_ACL
-snmp-server user {{ SNMP_V3_USERNAME }} {{ SNMP_V3_GROUP }} v3 auth sha {{ SNMP_V3_KEY }} priv aes 128 {{ snmp_v3_key }}
+snmp-server user {{ SNMP_V3_USERNAME }} {{ SNMP_V3_GROUP }} v3 auth sha {{ SNMP_V3_AUTH_KEY }} priv aes 128 {{ SNMP_V3_PRIV_KEY }}
 snmp-server host {{ SNMP_SERVER_IP_1 }} version 3 priv {{ SNMP_V3_USERNAME }}
 !
 snmp ifmib ifindex persist
@@ -268,8 +289,9 @@ udld aggressive
 !
 spanning-tree mode rapid-pvst
 !
-spanning-tree extended system-id
-spanning-tree portfast edge bpduguard enable
+spanning-tree extend system-id
+spanning-tree portfast bpduguard default
+spanning-tree loopguard default
 !         
 privilege exec level 7 copy running-config
 privilege exec level 7 copy
@@ -296,6 +318,7 @@ ip access-list extended WEB_AUTH_REDIRECT
  30 deny udp any any eq 53
  40 deny udp any any eq 67
  50 permit ip any any
+ exit
 !
 banner exec ^
 
@@ -327,10 +350,10 @@ banner login ^
 
 |============================================================================
 |
-|                          W A R N I N G
-|                          =============
+|                               W A R N I N G
+|                               =============
 |
-|                      READ BEFORE PROCEEDING
+|                          READ BEFORE PROCEEDING
 |
 |
 |         THIS SYSTEM IS THE PROPRITORY OF {{ ORG_NAME }}.
@@ -353,24 +376,26 @@ line con 0
  exec-timeout 5 0
  login authentication default
  logging synchronous
+ exit
 !
 line vty 0 15
  access-class MGMT_ACL in vrf-also
  login authentication TACACS_AUTHEN
  authorization commands 15 TACACS_CMDS
  authorization exec TACACS_AUTHOR
- login {{ VTY_PASSWORD }}
  transport preferred none
  transport input ssh
  transport output none
  exec-timeout 5 0
  logging synchronous
+ exit
 !
 !
 access-list standard NTP_ACL
  10 permit ip {{ NTP_SERVER_IP_1 }}
  20 permit ip {{ NTP_SERVER_IP_2 }}
  100 deny any
+ exit
 !
 ntp access-group peer NTP_ACL
 ntp server {{ NTP_SERVER_IP_1 }} source vlan {{ MGMT_VLAN_ID }}
@@ -426,6 +451,7 @@ class-map type control subscriber match-none NOT_IN_CRITICAL_AUTH
 class-map type control subscriber match-all AUTHC_SUCCESS-AUTHZ_FAIL
     match authorization-status unauthorized
     match result-type success
+    exit
 !
 !-------------------- POLICY MAP -----------------------------
 !
@@ -483,18 +509,33 @@ policy-map type control subscriber DOT1X_MAB_POLICY
 !
 !############### INTERFACE TEMPLATES ########################
 !
-template FLEX_AP_TEMPLATE
- description ---> AP PORT
- switchport trunk allowed vlan {{ FLEX_AP_ALLOWED_VLANS }}
- switchport trunk native vlan {{ FLEX_AP_MGMT_VLAN_ID }}
+template TRUNK_FLEX_AP
+ description ** Trunk - AP
+ switchport mode trunk
+ switchport nonegotiate
+ storm-control broadcast level 20
+ storm-control multicast level 20
+ storm-control unknown-unicast level 20
+ storm-control action trap
+!
+template TRUNK_UPLINK
+ description -> TRUNK - UPLINK
  switchport mode trunk
  switchport nonegotiate
  storm-control broadcast level 10
  storm-control multicast level 10
+ storm-control unknown-unicast level 10
  storm-control action trap
+ spanning-tree guard loop
+ ip dhcp snooping trust
+ load-interval 60
+
 !
-template DOT1x_TEMPLATE_OPEN
- description ---> ACCESS PORT OPEN AUTH
+template ACCESS_DOT1X_MAB_OPEN
+ description -> Access - DOT1X-MAB - Open Auth with Vlan-999
+ switchport nonegotiate
+ switchport mode access
+ switchport access vlan 999
  dot1x pae authenticator
  dot1x timeout tx-period 7
  dot1x max-reauth-req 2
@@ -509,18 +550,26 @@ template DOT1x_TEMPLATE_OPEN
  load-interval 60
  storm-control broadcast level 1
  storm-control multicast level 1
+ storm-control unknown-unicast level 1
  storm-control action trap
+ spanning-tree portfast
+ spanning-tree bpduguard enable
  switchport port-security
  switchport port-security maximum 2
+ switchport port-security aging time 2
+ switchport port-security aging type inactivity
  switchport port-security violation restrict
  service-policy type control subscriber DOT1X_MAB_POLICY
+ subscriber aging inactivity-timer 60 probe
  device-tracking attach-policy IPDT_POLICY
+ ip dhcp snooping limit rate 15
+
 !
-template DOT1x_TEMPLATE_CLOSED
- description ---> ACCESS PORT CLOSED AUTH
+template ACCESS_DOT1X_MAB_CLOSED
+ description -> Access - DOT1X-MAB - Closed Auth with Vlan-999
+ switchport nonegotiate
  switchport mode access
- spanning-tree portfast edge
- spanning-tree bpduguard enable
+ switcport access vlan 999
  dot1x pae authenticator
  dot1x timeout tx-period 7
  dot1x max-reauth-req 3
@@ -535,53 +584,110 @@ template DOT1x_TEMPLATE_CLOSED
  load-interval 60
  storm-control broadcast level 1
  storm-control multicast level 1
+ storm-control unknown-unicast level 1
  storm-control action trap
+ spanning-tree portfast
+ spanning-tree bpduguard enable
  switchport port-security
  switchport port-security maximum 2
+ switchport port-security aging time 2
+ switchport port-security aging type inactivity
  switchport port-security violation restrict
  service-policy type control subscriber DOT1X_MAB_POLICY
+ subscriber aging inactivity-timer 60 probe
  device-tracking attach-policy IPDT_POLICY
+ ip dhcp snooping limit rate 15
 !
-template ACCESS_TEMPLATE_NOAUTH
- description ---> ACCESS PORT NO AUTH
+template ACCESS_NOAUTH
+ description -> Access - No Auth with Vlan-999
+ switchport nonegotiate
  switchport mode access
+ switcport access vlan 999
  spanning-tree portfast edge
  spanning-tree bpduguard enable
- subscriber aging inactivity-timer 60 probe
  load-interval 60
  storm-control broadcast level 1
  storm-control multicast level 1
+ storm-control unknown-unicast level 1
  storm-control action trap
  switchport port-security
  switchport port-security maximum 2
+ switchport port-security aging time 2
+ switchport port-security aging type inactivity
  switchport port-security violation restrict
  device-tracking attach-policy IPDT_POLICY
+ ip dhcp snooping limit rate 15
 !
-!===== ACCESS_PORT_CONFIG =====
+!
+!
+!
+!=======================================================================================================
+!                               INTERFACE CONFIG EXAMPLE
+!=======================================================================================================
+
+!===================== ACCESS_PORT_CONFIG EXAMPLE =====================
 !
 interface range Gigabit0/1 - 24
+ description -> ACCESS --> <Endpoint_Type>
+    ! example: description -> ACCESS --> USER
+    ! example: description -> ACCESS --> PRINTER
+    ! example: description -> ACCESS --> MPLS_RTR1 | 10.1.1.1 -> G0/0
  switchport access vlan XXX
  switchport voice vlan YYY
- device-tracking attach-policy IPDT_POLICY
- source template DOT1x_TEMPLATE_CLOSED
-
-
-!===== UPLINK_PORT_CONFIG =====
+ source template ACCESS_DOT1X_MAB_CLOSED
+!
+!
+!
+!===================== UPLINK_PORT_CONFIG EXAMPLE =====================
 !
 interface range Gigabit0/25
- description ---> UPLINK PORT
+ description ** <LinkType> -->  <Neighbor_Name> | <Neighbor_IP> -> <Neighbor_Interface>
+    ! example : description  ** TRUNK --> 3RDFLR_SW | 10.10.10.2 -> Gig1/0/2
  switchport mode trunk
  switchport trunk allowed vlan <vlan list>
- storm-control broadcast level 10
- storm-control multicast level 10
  udld mode aggressive
- load-interval 60
- spanning-tree guard loop
- storm-control action trap
+ source template TRUNK_UPLINK
+!
+!
+!
+!===== AP_PORT_CONFIG EXAMPLE =====
+!
+interface range Gigabit0/25
+ description ** <LinkType> --> <AP_Name> | <AP_IP>
+    ! example : description  ** TRUNK --> 2F_AP02 | 10.10.10.10
+ switchport trunk allowed vlan <WIFI VLAN LIST>
+ switchport trunk native vlan <AP MGMT VLAN
+ source template TRUNK_FLEX_AP
+!
+!
+!
+!========= PORT CHANNEL CONFIG EXAMPLE =========
+!
+interface range Gigabit0/25
+ description ** <LinkType> -->  <Neighbor_Name> | <Neighbor_IP> -> <Neighbor_Interface>
+    ! example : description  ** TRUNK --> 3RDFLR_SW | 10.10.10.2 -> Gig1/0/2
+ udld mode aggressive
+ channel-group 10 mode active
+!
+interface range Gigabit0/26
+ description ** <LinkType> -->  <Neighbor_Name> | <Neighbor_IP> -> <Neighbor_Interface>
+    ! example : description  ** TRUNK --> 3RDFLR_SW | 10.10.10.2 -> Gig1/0/3
+ udld mode aggressive
+ channel-group 10 mode active
 
-==== STORM CONTROL VALUES ===
- 1Gig (Access= 1), (uplink = 10)
- 10Gig = 1
- 25Gig = 0.5
- 40G = 0.5
- 100G = 0.5
+!
+interface port-channel 10
+ description  ** <LinkType> -->  <Neighbor_Name> | <Neighbor_IP> -> <Neighbor_Interface>
+    ! example : description  ** TRUNK --> 3RDFLR_SW | 10.10.10.2 -> PO-10
+ source template TRUNK_UPLINK
+ switchport mode trunk
+ switchport trunk allowed vlan <vlan list>
+!
+!
+!
+!==== STORM CONTROL VALUES FOR DIFFERENT INTERFACE SPEED ===
+! 1Gig (Access= 1), (uplink = 10)
+! 10Gig = 1
+! 25Gig = 0.5
+! 40G = 0.5
+! 100G = 0.5

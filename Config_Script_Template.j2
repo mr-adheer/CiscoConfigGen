@@ -625,7 +625,8 @@ template ACCESS_NOAUTH
 !                               INTERFACE CONFIG EXAMPLE
 !=======================================================================================================
 
-!===== ACCESS_PORT_CONFIG EXAMPLE =====
+!===================== ACCESS_PORT_CONFIG EXAMPLE =====================
+!
 interface range Gigabit0/1 - 24
  description -> ACCESS --> <Endpoint_Type>
     ! example: description -> ACCESS --> USER
@@ -637,7 +638,8 @@ interface range Gigabit0/1 - 24
 !
 !
 !
-!===== UPLINK_PORT_CONFIG EXAMPLE =====
+!===================== UPLINK_PORT_CONFIG EXAMPLE =====================
+!
 interface range Gigabit0/25
  description ** <LinkType> -->  <Neighbor_Name> | <Neighbor_IP> -> <Neighbor_Interface>
     ! example : description  ** TRUNK --> 3RDFLR_SW | 10.10.10.2 -> Gig1/0/2

@@ -440,6 +440,7 @@ aaa group server radius RADIUS_GRP
 aaa server radius dynamic-author
  client {{ RADIUS_SRV_1_IP }} server-key {{ RADIUS_PSK }}
  client {{ RADIUS_SRV_2_IP }} server-key {{ RADIUS_PSK }}
+ load-balance method least-outstanding batch-size 30
  exit
 !
 !

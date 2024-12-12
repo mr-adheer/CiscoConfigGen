@@ -1,30 +1,52 @@
-!================= {{ DEVICE_TYPE }} CONFIG =============================
-!   {{ DEVICE_MODEL }} CONFIGURAITON SCRIPT FOR {{ORG_NAME }}
-!   BRANCH NAME = {{ BRANCH_NAME }} , BRANCH ID = {{ BRANCH_ID }}
-!========================================================================
+!================= {{ DEVICE_TYPE }} CONFIG CREATED ON = {{ CONFIG_CREATE_TIME }} =============================
+!
+!               {{ DEVICE_MODEL }} CONFIGURAITON SCRIPT FOR {{ORG_NAME }}
+!                BRANCH NAME = {{ BRANCH_NAME }} , BRANCH ID = {{ BRANCH_ID }}
+!
+!================================================================================================================
 !
 hostname {{ HOSTNAME }}
 !
-no service pad
 service timestamps debug datetime msec localtime show-timezone
 service timestamps log datetime msec localtime show-timezone
+service timestamps log uptime
 service password-encryption
 service tcp-keepalives-in
 service tcp-keepalives-out
 service sequence-numbers
+sevice nagle
+service compress-config
+service counters max age 5
+service call-home
+no bootp server
 no ip finger
 no service dhcp
 no service config
+no service pad
+no service tcp-small-servers
+no service udp-small-servers
+no ip source-route
+no service internal
+no ntp allow mode control
+ip options drop
+mac address-table aging-time 300
+ip tcp synwait-time 10
 software auto-upgrade enable
+exception crashinfo maximum files 2
+ip icmp rate-limit unreachable 500
 !
 memory reserve console 4096
+memory free low-watermark processor 20000
+memory free low-watermark io 20000
+memory reserved critical 1000
 !
+no logging console
+no logging monitor
 logging buffered warnings
-logging buffered 64000
-logging console warnings
-logging monitor informational
+logging buffered 102400
 logging trap informational
 logging history informational
+logging snmp-authfail
 logging source-interface vlan {{ MGMT_VLAN_ID }}
 logging host {{ SYSLOG_SERVER_1_IP }} transport udp port {{ SYSLOG_SERVER_1_PORT }}
 logging host {{ SYSLOG_SERVER_2_IP }} transport udp port {{ SYSLOG_SERVER_2_PORT }}
@@ -34,8 +56,10 @@ vtp mode transparent
 !
 clock timezone IST 5 30
 !
+key config-key password-encryption {{ AES_ENCRYPTION_KEY }}
 password encryption aes
 !
+boot system flash:packages.conf
 !
 aaa common-criteria policy PASSWORD_POLICY
  min-length 8
@@ -46,8 +70,10 @@ aaa common-criteria policy PASSWORD_POLICY
  special-case 1
  char-changes 4
 !
-username {{ LOCAL_USERNAME }} privilege 1 common-criteria-policy PASSWORD_POLICY algorithm-type sha256 secret {{ LOCAL_SECRET }}
-enable common-criteria-policy PASSWORD_POLICY algorithm-type sha256 secret level 15  {{ ENABLE_SECRET }}
+! use Type9 password encryption
+username {{ LOCAL_USERNAME_15 }} privilege 15 common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret {{ LOCAL_SECRET_15 }}
+username {{ LOCAL_USERNAME_7 }} privilege 7  common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret {{ LOCAL_SECRET_7 }}
+enable common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret level 15  {{ ENABLE_SECRET }}
 !
 aaa new-model
 authentication convert-to new-style
@@ -58,12 +84,14 @@ tacacs server TACACS_{{ TACACS_SRV_1_IP }}
  address ipv4 {{ TACACS_SRV_1_IP }}
  key {{ TACACS_PSK }}
  timeout 4
+ single-connection
  exit
 !
 tacacs server TACACS_{{ TACACS_SRV_2_IP }}
  address ipv4 {{ TACACS_SRV_2_IP }}
  key {{ TACACS_PSK }}
  timeout 4
+ single-connection
  exit
 !
 !
@@ -75,44 +103,20 @@ aaa group server tacacs+ TACACS_GRP
 !
 ip tacacs source-interface vlan {{ MGMT_VLAN_ID }}
 !
-radius server RADIUS_{{ RADIUS_SRV_1_IP }}
- address ipv4 {{ RADIUS_SRV_1_IP }} auth-port 1812 acct-port 1813
- timeout 4
- retransmit 3
- automate-tester username TESTUSER ignore-acct-port probe-on
-  pac key {{ RADIUS_PSK }}
-!
-radius server RADIUS_{{ RADIUS_SRV_2_IP }}
- address ipv4 {{ RADIUS_SRV_2_IP }} auth-port 1812 acct-port 1813
- timeout 4
- retransmit 3
- automate-tester username TESTUSER ignore-acct-port probe-on
-  pac key {{ RADIUS_PSK }}
-!
-ip radius source-interface vlan {{ MGMT_VLAN_ID }}
-!
-aaa group server radius RADIUS_GRP
- server name RADIUS_{{ RADIUS_SRV_1_IP }}
- server name RADIUS_{{ RADIUS_SRV_2_IP }}
- ip radius source-interface vlan {{ MGMT_VLAN_ID }}
-!
+! AAA FOR LOGIN AND TACACS
+aaa authentication fail-message  * LOGIN FAILED *
 aaa authentication login default local
 aaa authentication login TACACS_AUTHEN group TACACS_GRP local
 aaa authentication enable default group TACACS_GRP enable
-aaa authentication dot1x default group RADIUS_GRP
 aaa authorization config-commands
 aaa authorization exec default local
 aaa authorization exec TACACS_AUTHOR group TACACS_GRP local if-authenticated
 aaa authorization commands 15 TACACS_CMDS group TACACS_GRP local if-authenticated
-aaa authorization network default group RADIUS_GRP
-aaa authorization network dnac-cts-list group RADIUS_GRP
-aaa authorization auth-proxy default group RADIUS_GRP
+aaa authorization commands 7 TACACS_CMDS group TACACS_GRP local if-authenticated
 aaa accounting update newinfo periodic 2880
-aaa accounting identity default start-stop group RADIUS_GRP
 aaa accounting exec default start-stop group TACACS_GRP
 aaa accounting commands 15 default start-stop group TACACS_GRP
-aaa accounting network default start-stop group RADIUS_GRP
-aaa accounting system default start-stop group RADIUS_GRP
+aaa accounting commands 7 default start-stop group TACACS_GRP
 aaa authorization console
 aaa login display number-failures
 aaa login success-track-conf-time 1
@@ -123,25 +127,11 @@ login on-failure log every 1
 login on-success log every 1
 login delay 3
 !
-aaa server radius dynamic-author
- client {{ RADIUS_SRV_1_IP }} server-key {{ RADIUS_PSK }}
- client {{ RADIUS_SRV_2_IP }} server-key {{ RADIUS_PSK }}
- exit
 !
 ip name-server {{ DNS_SERVER_IP_1 }} {{ DNS_SERVER_IP_2 }}
-ip domain lookup source-interface vlan {{ MGMT_VLAN_ID }}
+no ip domain-lookup
 ip domain name {{ DOMAIN_NAME }}
 !
-radius-server vsa send authentication
-radius-server vsa send accounting
-radius-server attribute 6 on-for-login-auth
-radius-server attribute 6 support-multiple
-radius-server attribute 8 include-in-access-req
-radius-server attribute 25 access-request include
-radius-server attribute 31 mac format ietf upper-case
-radius-server attribute 31 send nas-port-detail mac-only
-radius-server dead-criteria time 5 tries 3
-radius-server load-balance method least-outstanding
 !
 aaa session-id common
 !
@@ -149,8 +139,12 @@ aaa session-id common
 archive
  log config
   logging enable
+  logging size 5
   notify syslog contenttype plaintext
   hidekeys
+  path flash:archived-config
+  maximum 14
+  write-memory
 !
 !
 interface vlan {{ MGMT_VLAN_ID }}
@@ -159,6 +153,8 @@ interface vlan {{ MGMT_VLAN_ID }}
  no ip redirects
  no ip unreachables
  no ip proxy-arp
+ no ip directed-broadcast
+ no mop enabled
  no shutdown
  exit
 !
@@ -243,7 +239,9 @@ ip ssh server algorithm mac hmac-sha2-512 hmac-sha2-256
 ip ssh server algorithm publickey ecdsa-sha2-nistp521 ecdsa-sha2-nistp384 rsa-sha2-512
 ip ssh source-interface Vlan {{ MGMT_VLAN_ID }}
 !
+!
 ip access-list standard MGMT_ACL
+! -> EDIT THE ACL AS REQUIRED <-
  10 permit 10.0.0.0 0.255.255.255 log
  20 permit 172.16.0.0 0.0.31.255 log
  39 permit 192.168.0.0 0.0.255.255 log
@@ -251,9 +249,9 @@ ip access-list standard MGMT_ACL
  exit
 !
 ip dhcp snooping
-ip dhcp snooping vlan number 1-4094
+ip dhcp snooping vlan {{ DHCP_SNOOPING_VLANS }}
 !
-ip arp inspection vlan 1-4094
+ip arp inspection vlan {{ DHCP_SNOOPING_VLANS }}
 !
 kron occurrence one-month at 11:59 1 recurring
  policy-list save
@@ -281,6 +279,11 @@ snmp-server location {{ SNMP_LOCATION }}
 snmp-server group {{ SNMP_V3_GROUP }} v3 priv access SNMP_ACL
 snmp-server user {{ SNMP_V3_USERNAME }} {{ SNMP_V3_GROUP }} v3 auth sha {{ SNMP_V3_AUTH_KEY }} priv aes 128 {{ SNMP_V3_PRIV_KEY }}
 snmp-server host {{ SNMP_SERVER_IP_1 }} version 3 priv {{ SNMP_V3_USERNAME }}
+snmp-server enable traps
+snmp-server enable traps cpu threshold
+process cpu threshold type total rising 80 interval 5 falling 20 interval 5
+process cpu statistics limit entry-percentage 40 size 300
+!
 !
 snmp ifmib ifindex persist
 snmp mib flash cache
@@ -311,14 +314,6 @@ privilege exec level 7 show
 privilege exec level 7 clear counters
 privilege exec level 7 clear
 !
-!
-ip access-list extended WEB_AUTH_REDIRECT
- 10 deny tcp any host {{ RADIUS_SRV_1_IP }} eq 8443
- 20 deny tcp any host {{ RADIUS_SRV_2_IP }} eq 8443
- 30 deny udp any any eq 53
- 40 deny udp any any eq 67
- 50 permit ip any any
- exit
 !
 banner exec ^
 
@@ -371,6 +366,11 @@ banner login ^
 ^
 !
 !
+line aux 0
+ transport input none
+ transport output none
+ no exec exec-timeout 0 1
+ no password
 !
 line con 0
  exec-timeout 5 0
@@ -382,6 +382,7 @@ line vty 0 15
  access-class MGMT_ACL in vrf-also
  login authentication TACACS_AUTHEN
  authorization commands 15 TACACS_CMDS
+ authorization commands 7 TACACS_CMDS
  authorization exec TACACS_AUTHOR
  transport preferred none
  transport input ssh
@@ -397,19 +398,74 @@ access-list standard NTP_ACL
  100 deny any
  exit
 !
-ntp authentication-key 2 md5 {{ NTP_KEY }}
 ntp authenticate
-ntp trusted-key 2
-
+ntp authentication-key 1 md5 {{ NTP_KEY }}
+ntp trusted-key 1
 ntp access-group peer NTP_ACL
-ntp server {{ NTP_SERVER_IP_1 }} key 2 source vlan {{ MGMT_VLAN_ID }}
-ntp server {{ NTP_SERVER_IP_2 }} key 2 source vlan {{ MGMT_VLAN_ID }}
+ntp server {{ NTP_SERVER_IP_1 }} key 1 source vlan {{ MGMT_VLAN_ID }}
+ntp server {{ NTP_SERVER_IP_2 }} key 1 source vlan {{ MGMT_VLAN_ID }}
 !
 !
+!========================================================================================================
+!                                   IBNS2.0 - RADIUS 802.1X
+!========================================================================================================
 !
-!========================== IBNS2.0 =================================
+!
+radius server RADIUS_{{ RADIUS_SRV_1_IP }}
+ address ipv4 {{ RADIUS_SRV_1_IP }} auth-port 1812 acct-port 1813
+ timeout 4
+ retransmit 3
+ automate-tester username RADIUSTESTING ignore-acct-port probe-on
+  pac key {{ RADIUS_PSK }}
+!
+radius server RADIUS_{{ RADIUS_SRV_2_IP }}
+ address ipv4 {{ RADIUS_SRV_2_IP }} auth-port 1812 acct-port 1813
+ timeout 4
+ retransmit 3
+ automate-tester username RADIUSTESTING ignore-acct-port probe-on
+  pac key {{ RADIUS_PSK }}
+!
+ip radius source-interface vlan {{ MGMT_VLAN_ID }}
+!
+aaa group server radius RADIUS_GRP
+ server name RADIUS_{{ RADIUS_SRV_1_IP }}
+ server name RADIUS_{{ RADIUS_SRV_2_IP }}
+ ip radius source-interface vlan {{ MGMT_VLAN_ID }}
+ deadtime 15
+!
+aaa server radius dynamic-author
+ client {{ RADIUS_SRV_1_IP }} server-key {{ RADIUS_PSK }}
+ client {{ RADIUS_SRV_2_IP }} server-key {{ RADIUS_PSK }}
+ exit
 !
 !
+ip access-list extended WEB_AUTH_REDIRECT
+ 10 deny tcp any host {{ RADIUS_SRV_1_IP }} eq 8443
+ 20 deny tcp any host {{ RADIUS_SRV_2_IP }} eq 8443
+ 30 deny udp any any eq 53
+ 40 deny udp any any eq 67
+ 50 permit ip any any
+ exit
+!
+!
+aaa session-id common
+aaa authentication dot1x default group RADIUS_GRP
+aaa authorization network default group RADIUS_GRP
+aaa authorization auth-proxy default group RADIUS_GRP
+aaa accounting identity default start-stop group RADIUS_GRP
+aaa accounting network default start-stop group RADIUS_GRP
+aaa accounting system default start-stop group RADIUS_GRP
+!
+radius-server vsa send authentication
+radius-server vsa send accounting
+radius-server attribute 6 on-for-login-auth
+radius-server attribute 6 support-multiple
+radius-server attribute 8 include-in-access-req
+radius-server attribute 25 access-request include
+radius-server attribute 31 mac format ietf upper-case
+radius-server attribute 31 send nas-port-detail mac-only
+radius-server dead-criteria time 5 tries 3
+radius-server load-balance method least-outstanding
 authentication convert-to new-style
 !
 dot1x system-auth-control
@@ -421,6 +477,7 @@ access-session acl default passthrough
 service-template CRITICAL_DATA_ACCESS
 service-template CRITICAL_VOICE_ACCESS
     voice vlan
+!
 ! -------------------- CLASS MAP ----------------------------------
 !
 class-map type control subscriber match-all AAA_SVR_DOWN_AUTHD_HOST
@@ -511,7 +568,107 @@ policy-map type control subscriber DOT1X_MAB_POLICY
         10 class AUTHC_SUCCESS-AUTHZ_FAIL do-until-failure
             10 authentication-restart 60
 !
-!############### INTERFACE TEMPLATES ########################
+
+!=======================================================================================================
+!                               INTERFACE CONFIGURATION EXAMPLE (WITHOUT TEMPLATES)
+!=======================================================================================================
+!
+!==================================== ACCESS_PORT_CONFIG EXAMPLE =======================================
+!
+interface range Gigabit0/1 - 24
+ description -> ACCESS --> <Endpoint_Type>
+    ! example: description -> ACCESS --> USER
+    ! example: description -> ACCESS --> PRINTER
+    ! example: description -> ACCESS --> DNS_SERVER
+    ! example: description -> ACCESS --> MPLS_RTR1 | 10.1.1.1 -> G0/0
+ switchport nonegotiate
+ switchport mode access
+ switcport access vlan <X>
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+ load-interval 60
+ storm-control broadcast level 1
+ storm-control multicast level 1
+ storm-control action trap
+ switchport port-security
+ switchport port-security maximum 3
+ switchport port-security aging time 2
+ switchport port-security aging type inactivity
+ switchport port-security violation restrict
+ device-tracking attach-policy IPDT_POLICY
+ ip dhcp snooping limit rate 15
+ source template ACCESS_DOT1X_MAB_CLOSED  !REMOVE THIS IF WIRED 802.1X IS NOT CONFIGURED IN THE NETWORK
+ no snmp trap link-status
+!
+!
+!
+!===================== UPLINK_PORT_CONFIG EXAMPLE =====================
+!
+interface range Gigabit0/25
+ description ** <LinkType> -->  <Neighbor_Name> | <Neighbor_IP> -> <Neighbor_Interface>
+    ! example : description  ** TRUNK --> 3RDFLR_SW | 10.10.10.2 -> Gig1/0/2
+ switchport mode trunk
+ switchport trunk allowed vlan <vlan list>
+ switchport nonegotiate
+ storm-control broadcast level 10
+ storm-control multicast level 10
+ storm-control action trap
+ spanning-tree guard loop
+ ip dhcp snooping trust
+ load-interval 60
+ udld mode aggressive
+ ip arp inspection trust
+!
+!
+!
+!===== AP_PORT_CONFIG EXAMPLE =====
+!
+interface range Gigabit0/25
+ description ** <LinkType> --> <AP_Name> | <AP_IP>
+    ! example : description  ** TRUNK --> 2F_AP02 | 10.10.10.10
+ switchport nonegotiate
+ switchport trunk allowed vlan <WIFI VLAN LIST>
+ switchport trunk native vlan <AP MGMT VLAN
+ storm-control broadcast level 20
+ storm-control multicast level 20
+ storm-control action trap
+!
+!
+!
+!========= PORT CHANNEL CONFIG EXAMPLE =========
+!
+interface range Gigabit0/25
+ description ** <LinkType> -->  <Neighbor_Name> | <Neighbor_IP> -> <Neighbor_Interface>
+    ! example : description  ** TRUNK --> 3RDFLR_SW | 10.10.10.2 -> Gig1/0/2
+ udld mode aggressive
+ channel-group 10 mode active
+!
+interface range Gigabit0/26
+ description ** <LinkType> -->  <Neighbor_Name> | <Neighbor_IP> -> <Neighbor_Interface>
+    ! example : description  ** TRUNK --> 3RDFLR_SW | 10.10.10.2 -> Gig1/0/3
+ udld mode aggressive
+ channel-group 10 mode active
+!
+!
+interface port-channel 10
+ description  ** <LinkType> -->  <Neighbor_Name> | <Neighbor_IP> -> <Neighbor_Interface>
+    ! example : description  ** TRUNK --> 3RDFLR_SW | 10.10.10.2 -> PO-10
+ source template TRUNK_UPLINK
+ switchport mode trunk
+ switchport trunk allowed vlan <vlan list>
+ switchport nonegotiate
+ storm-control broadcast level 10
+ storm-control multicast level 10
+ storm-control action trap
+ spanning-tree guard loop
+ ip dhcp snooping trust
+ load-interval 60
+ udld mode aggressive
+ ip arp inspection trust
+!
+!#########################################################################################################
+!                                          INTERFACE TEMPLATES
+!#########################################################################################################
 !
 template TRUNK_FLEX_AP
  description ** Trunk - AP
@@ -519,7 +676,6 @@ template TRUNK_FLEX_AP
  switchport nonegotiate
  storm-control broadcast level 20
  storm-control multicast level 20
- storm-control unknown-unicast level 20
  storm-control action trap
 !
 template TRUNK_UPLINK
@@ -528,7 +684,6 @@ template TRUNK_UPLINK
  switchport nonegotiate
  storm-control broadcast level 10
  storm-control multicast level 10
- storm-control unknown-unicast level 10
  storm-control action trap
  spanning-tree guard loop
  ip dhcp snooping trust
@@ -554,12 +709,11 @@ template ACCESS_DOT1X_MAB_OPEN
  load-interval 60
  storm-control broadcast level 1
  storm-control multicast level 1
- storm-control unknown-unicast level 1
  storm-control action trap
  spanning-tree portfast
  spanning-tree bpduguard enable
  switchport port-security
- switchport port-security maximum 2
+ switchport port-security maximum 3
  switchport port-security aging time 2
  switchport port-security aging type inactivity
  switchport port-security violation restrict
@@ -588,12 +742,11 @@ template ACCESS_DOT1X_MAB_CLOSED
  load-interval 60
  storm-control broadcast level 1
  storm-control multicast level 1
- storm-control unknown-unicast level 1
  storm-control action trap
  spanning-tree portfast
  spanning-tree bpduguard enable
  switchport port-security
- switchport port-security maximum 2
+ switchport port-security maximum 3
  switchport port-security aging time 2
  switchport port-security aging type inactivity
  switchport port-security violation restrict
@@ -612,10 +765,9 @@ template ACCESS_NOAUTH
  load-interval 60
  storm-control broadcast level 1
  storm-control multicast level 1
- storm-control unknown-unicast level 1
  storm-control action trap
  switchport port-security
- switchport port-security maximum 2
+ switchport port-security maximum 3
  switchport port-security aging time 2
  switchport port-security aging type inactivity
  switchport port-security violation restrict
@@ -626,7 +778,7 @@ template ACCESS_NOAUTH
 !
 !
 !=======================================================================================================
-!                               INTERFACE CONFIG EXAMPLE
+!                               INTERFACE CONFIGURATION EXAMPLE (WITH TEMPLATES)
 !=======================================================================================================
 
 !===================== ACCESS_PORT_CONFIG EXAMPLE =====================
@@ -690,8 +842,9 @@ interface port-channel 10
  switchport trunk allowed vlan <vlan list>
 !
 !
-!
-!==== STORM CONTROL VALUES FOR DIFFERENT INTERFACE SPEED ===
+!======================================================================================================
+!                   STORM CONTROL VALUES FOR DIFFERENT INTERFACE SPEED
+!======================================================================================================
 ! 1Gig (Access= 1), (uplink = 10)
 ! 10Gig = 1
 ! 25Gig = 0.5

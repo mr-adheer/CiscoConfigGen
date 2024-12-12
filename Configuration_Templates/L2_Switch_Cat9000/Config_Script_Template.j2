@@ -76,6 +76,7 @@ username {{ LOCAL_USERNAME_7 }} privilege 7  common-criteria-policy PASSWORD_POL
 enable common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret level 15  {{ ENABLE_SECRET }}
 !
 aaa new-model
+aaa session-id common
 authentication convert-to new-style
 !
 no ip source-route
@@ -103,7 +104,7 @@ aaa group server tacacs+ TACACS_GRP
 !
 ip tacacs source-interface vlan {{ MGMT_VLAN_ID }}
 !
-! AAA FOR LOGIN AND TACACS
+! -> AAA FOR LOGIN AND TACACS
 aaa authentication fail-message  * LOGIN FAILED *
 aaa authentication login default local
 aaa authentication login TACACS_AUTHEN group TACACS_GRP local
@@ -132,8 +133,6 @@ ip name-server {{ DNS_SERVER_IP_1 }} {{ DNS_SERVER_IP_2 }}
 no ip domain-lookup
 ip domain name {{ DOMAIN_NAME }}
 !
-!
-aaa session-id common
 !
 !
 archive
@@ -168,12 +167,15 @@ ip access-list standard HTTP_ACL
 no ip http server
 no ip http secure-server
 ip http access-class ipv4 HTTP_ACL
+ip http active-session-modules none
+ip http secure-active-session-modules none
 !
 !
 device-tracking tracking auto-source
 !
 device-tracking policy IPDT_POLICY
  tracking enable
+ no protocol udp
  exit
 !
 device-sensor filter-list cdp list CDP_LIST
@@ -181,6 +183,7 @@ device-sensor filter-list cdp list CDP_LIST
  tlv name address-type
  tlv name capabilities-type
  tlv name platform-type
+ tlv name version-type
  exit
 !
 device-sensor filter-spec cdp include list CDP_LIST
@@ -188,6 +191,7 @@ device-sensor filter-spec cdp include list CDP_LIST
 device-sensor filter-list lldp list LLDP_LIST
  tlv name system-name
  tlv name system-description
+ tlv name system-capabilities
  exit
 !
 device-sensor filter-spec lldp include list LLDP_LIST
@@ -415,14 +419,14 @@ radius server RADIUS_{{ RADIUS_SRV_1_IP }}
  address ipv4 {{ RADIUS_SRV_1_IP }} auth-port 1812 acct-port 1813
  timeout 4
  retransmit 3
- automate-tester username RADIUSTESTING ignore-acct-port probe-on
+ automate-tester username RADIUSTESTING ignore-acct-port
   pac key {{ RADIUS_PSK }}
 !
 radius server RADIUS_{{ RADIUS_SRV_2_IP }}
  address ipv4 {{ RADIUS_SRV_2_IP }} auth-port 1812 acct-port 1813
  timeout 4
  retransmit 3
- automate-tester username RADIUSTESTING ignore-acct-port probe-on
+ automate-tester username RADIUSTESTING ignore-acct-port
   pac key {{ RADIUS_PSK }}
 !
 ip radius source-interface vlan {{ MGMT_VLAN_ID }}
@@ -436,6 +440,7 @@ aaa group server radius RADIUS_GRP
 aaa server radius dynamic-author
  client {{ RADIUS_SRV_1_IP }} server-key {{ RADIUS_PSK }}
  client {{ RADIUS_SRV_2_IP }} server-key {{ RADIUS_PSK }}
+ load-balance method least-outstanding batch-size 30
  exit
 !
 !
@@ -464,6 +469,7 @@ radius-server attribute 8 include-in-access-req
 radius-server attribute 25 access-request include
 radius-server attribute 31 mac format ietf upper-case
 radius-server attribute 31 send nas-port-detail mac-only
+radius-server deadtime 15
 radius-server dead-criteria time 5 tries 3
 radius-server load-balance method least-outstanding
 authentication convert-to new-style
@@ -472,7 +478,7 @@ dot1x system-auth-control
 dot1x critical eaopl
 authentication critical recovery delay 2000
 no access-session mac-move deny
-access-session acl default passthrough
+authentication mac-move permit
 !
 service-template CRITICAL_DATA_ACCESS
 service-template CRITICAL_VOICE_ACCESS
@@ -568,6 +574,89 @@ policy-map type control subscriber DOT1X_MAB_POLICY
         10 class AUTHC_SUCCESS-AUTHZ_FAIL do-until-failure
             10 authentication-restart 60
 !
+template ACCESS_DOT1X_MAB_OPEN
+ description -> Access - DOT1X-MAB - Open Auth with Vlan-999
+ switchport nonegotiate
+ switchport mode access
+ switchport access vlan 999
+ dot1x pae authenticator
+ dot1x timeout tx-period 7
+ dot1x max-reauth-req 2
+ mab
+ subscriber aging inactivity-timer 60 probe
+ access-session control-direction in
+ access-session host-mode multi-domain
+ access-session port-control auto
+ no access-session closed
+ authentication periodic
+ authentication timer reauthenticate server
+ load-interval 60
+ storm-control broadcast level 1
+ storm-control multicast level 1
+ storm-control action trap
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ switchport port-security
+ switchport port-security maximum 3
+ switchport port-security aging time 2
+ switchport port-security aging type inactivity
+ switchport port-security violation restrict
+ service-policy type control subscriber DOT1X_MAB_POLICY
+ subscriber aging inactivity-timer 60 probe
+ device-tracking attach-policy IPDT_POLICY
+ ip dhcp snooping limit rate 15
+
+!
+template ACCESS_DOT1X_MAB_CLOSED
+ description -> Access - DOT1X-MAB - Closed Auth with Vlan-999
+ switchport nonegotiate
+ switchport mode access
+ switcport access vlan 999
+ dot1x pae authenticator
+ dot1x timeout tx-period 7
+ dot1x max-reauth-req 3
+ mab
+ subscriber aging inactivity-timer 60 probe
+ access-session control-direction in
+ access-session host-mode multi-domain
+ access-session closed
+ access-session port-control auto
+ authentication periodic
+ authentication timer reauthenticate server
+ load-interval 60
+ storm-control broadcast level 1
+ storm-control multicast level 1
+ storm-control action trap
+ spanning-tree portfast
+ spanning-tree bpduguard enable
+ switchport port-security
+ switchport port-security maximum 3
+ switchport port-security aging time 2
+ switchport port-security aging type inactivity
+ switchport port-security violation restrict
+ service-policy type control subscriber DOT1X_MAB_POLICY
+ subscriber aging inactivity-timer 60 probe
+ device-tracking attach-policy IPDT_POLICY
+ ip dhcp snooping limit rate 15
+!
+template ACCESS_NOAUTH
+ description -> Access - No Auth with Vlan-999
+ switchport nonegotiate
+ switchport mode access
+ switcport access vlan 999
+ spanning-tree portfast edge
+ spanning-tree bpduguard enable
+ load-interval 60
+ storm-control broadcast level 1
+ storm-control multicast level 1
+ storm-control action trap
+ switchport port-security
+ switchport port-security maximum 3
+ switchport port-security aging time 2
+ switchport port-security aging type inactivity
+ switchport port-security violation restrict
+ device-tracking attach-policy IPDT_POLICY
+ ip dhcp snooping limit rate 15
 
 !=======================================================================================================
 !                               INTERFACE CONFIGURATION EXAMPLE (WITHOUT TEMPLATES)
@@ -688,72 +777,6 @@ template TRUNK_UPLINK
  spanning-tree guard loop
  ip dhcp snooping trust
  load-interval 60
-
-!
-template ACCESS_DOT1X_MAB_OPEN
- description -> Access - DOT1X-MAB - Open Auth with Vlan-999
- switchport nonegotiate
- switchport mode access
- switchport access vlan 999
- dot1x pae authenticator
- dot1x timeout tx-period 7
- dot1x max-reauth-req 2
- mab
- subscriber aging inactivity-timer 60 probe
- access-session control-direction in
- access-session host-mode multi-domain
- access-session port-control auto
- no access-session closed
- authentication periodic
- authentication timer reauthenticate server
- load-interval 60
- storm-control broadcast level 1
- storm-control multicast level 1
- storm-control action trap
- spanning-tree portfast
- spanning-tree bpduguard enable
- switchport port-security
- switchport port-security maximum 3
- switchport port-security aging time 2
- switchport port-security aging type inactivity
- switchport port-security violation restrict
- service-policy type control subscriber DOT1X_MAB_POLICY
- subscriber aging inactivity-timer 60 probe
- device-tracking attach-policy IPDT_POLICY
- ip dhcp snooping limit rate 15
-
-!
-template ACCESS_DOT1X_MAB_CLOSED
- description -> Access - DOT1X-MAB - Closed Auth with Vlan-999
- switchport nonegotiate
- switchport mode access
- switcport access vlan 999
- dot1x pae authenticator
- dot1x timeout tx-period 7
- dot1x max-reauth-req 3
- mab
- subscriber aging inactivity-timer 60 probe
- access-session control-direction in
- access-session host-mode multi-domain
- access-session closed
- access-session port-control auto
- authentication periodic
- authentication timer reauthenticate server
- load-interval 60
- storm-control broadcast level 1
- storm-control multicast level 1
- storm-control action trap
- spanning-tree portfast
- spanning-tree bpduguard enable
- switchport port-security
- switchport port-security maximum 3
- switchport port-security aging time 2
- switchport port-security aging type inactivity
- switchport port-security violation restrict
- service-policy type control subscriber DOT1X_MAB_POLICY
- subscriber aging inactivity-timer 60 probe
- device-tracking attach-policy IPDT_POLICY
- ip dhcp snooping limit rate 15
 !
 template ACCESS_NOAUTH
  description -> Access - No Auth with Vlan-999
@@ -775,8 +798,6 @@ template ACCESS_NOAUTH
  ip dhcp snooping limit rate 15
 !
 !
-!
-!
 !=======================================================================================================
 !                               INTERFACE CONFIGURATION EXAMPLE (WITH TEMPLATES)
 !=======================================================================================================
@@ -791,7 +812,7 @@ interface range Gigabit0/1 - 24
  switchport access vlan XXX
  switchport voice vlan YYY
  ip arp inspection trust
- source template ACCESS_DOT1X_MAB_CLOSED
+ source template ACCESS_NOAUTH
 !
 !
 !

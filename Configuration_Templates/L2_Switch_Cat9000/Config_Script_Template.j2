@@ -1,4 +1,4 @@
-!================= {{ DEVICE_TYPE }} CONFIG CREATED ON = {{ CONFIG_CREATE_TIME }} =============================
+!================= {{ DEVICE_TYPE }} CONFIG CREATED ON = {{ TODAY_DATE_TIME }} =============================
 !
 !               {{ DEVICE_MODEL }} CONFIGURAITON SCRIPT FOR {{ORG_NAME }}
 !                BRANCH NAME = {{ BRANCH_NAME }} , BRANCH ID = {{ BRANCH_ID }}
@@ -34,16 +34,17 @@ ip tcp synwait-time 10
 software auto-upgrade enable
 exception crashinfo maximum files 2
 ip icmp rate-limit unreachable 500
+no ip source-route
+
 !
-memory reserve console 4096
 memory free low-watermark processor 20000
 memory free low-watermark io 20000
 memory reserved critical 1000
 !
-no logging console
 no logging monitor
+no logging console
 logging buffered warnings
-logging buffered 102400
+logging buffered size 10485760
 logging trap informational
 logging history informational
 logging snmp-authfail
@@ -75,53 +76,6 @@ username {{ LOCAL_USERNAME_15 }} privilege 15 common-criteria-policy PASSWORD_PO
 username {{ LOCAL_USERNAME_7 }} privilege 7  common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret {{ LOCAL_SECRET_7 }}
 enable common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret level 15  {{ ENABLE_SECRET }}
 !
-aaa new-model
-aaa session-id common
-authentication convert-to new-style
-!
-no ip source-route
-!
-tacacs server TACACS_{{ TACACS_SRV_1_IP }}
- address ipv4 {{ TACACS_SRV_1_IP }}
- key {{ TACACS_PSK }}
- timeout 4
- single-connection
- exit
-!
-tacacs server TACACS_{{ TACACS_SRV_2_IP }}
- address ipv4 {{ TACACS_SRV_2_IP }}
- key {{ TACACS_PSK }}
- timeout 4
- single-connection
- exit
-!
-!
-aaa group server tacacs+ TACACS_GRP
- server name TACACS_{{ TACACS_SRV_1_IP }}
- server name TACACS_{{ TACACS_SRV_2_IP }}
- exit
-!
-!
-ip tacacs source-interface vlan {{ MGMT_VLAN_ID }}
-!
-! -> AAA FOR LOGIN AND TACACS
-aaa authentication fail-message  * LOGIN FAILED *
-aaa authentication login default local
-aaa authentication login TACACS_AUTHEN group TACACS_GRP local
-aaa authentication enable default group TACACS_GRP enable
-aaa authorization config-commands
-aaa authorization exec default local
-aaa authorization exec TACACS_AUTHOR group TACACS_GRP local if-authenticated
-aaa authorization commands 15 TACACS_CMDS group TACACS_GRP local if-authenticated
-aaa authorization commands 7 TACACS_CMDS group TACACS_GRP local if-authenticated
-aaa accounting update newinfo periodic 2880
-aaa accounting exec default start-stop group TACACS_GRP
-aaa accounting commands 15 default start-stop group TACACS_GRP
-aaa accounting commands 7 default start-stop group TACACS_GRP
-aaa authorization console
-aaa login display number-failures
-aaa login success-track-conf-time 1
-!
 !
 login block-for 120 attempts 3 within 30
 login on-failure log every 1
@@ -142,7 +96,8 @@ archive
   notify syslog contenttype plaintext
   hidekeys
   path flash:archived-config
-  maximum 14
+  maximum 10
+  time-period 1440
   write-memory
 !
 !
@@ -169,6 +124,7 @@ no ip http secure-server
 ip http access-class ipv4 HTTP_ACL
 ip http active-session-modules none
 ip http secure-active-session-modules none
+!
 !
 !
 device-tracking tracking auto-source
@@ -229,12 +185,12 @@ access-session accounting attributes filter-spec include list Def_Acct_List
 !
 no macro auto monitor
 !
-crypto key generate rsa modulus 4096 label SSH-4096-RSA-KEY
+crypto key generate rsa modulus 4096 label SSH-KEY-RSA-4096
 ip ssh logging events
 ip ssh version 2
 ip ssh time-out 60
 ip ssh authentication-retries 3
-ip ssh rsa keypair-name SSH-4096-RSA-KEY
+ip ssh rsa keypair-name SSH-KEY-RSA-4096
 ip ssh server algorithm authentication keyboard
 ip ssh server algorithm kex ecdh-sha2-nistp521 ecdh-sha2-nistp384
 ip ssh server algorithm hostkey rsa-sha2-512 rsa-sha2-256
@@ -253,6 +209,7 @@ ip access-list standard MGMT_ACL
  exit
 !
 ip dhcp snooping
+no ip dhcp snooping information option
 ip dhcp snooping vlan {{ DHCP_SNOOPING_VLANS }}
 !
 ip arp inspection vlan {{ DHCP_SNOOPING_VLANS }}
@@ -382,6 +339,70 @@ line con 0
  logging synchronous
  exit
 !
+
+!
+!
+access-list standard NTP_ACL
+ 10 permit ip {{ NTP_SERVER_IP_1 }}
+ 20 permit ip {{ NTP_SERVER_IP_2 }}
+ 100 deny any
+ exit
+!
+ntp authenticate
+ntp authentication-key 1 md5 {{ NTP_KEY }}
+ntp trusted-key 1
+ntp source {{ MGMT_VLAN_ID }}
+ntp server {{ NTP_SERVER_IP_1 }} key 1
+ntp server {{ NTP_SERVER_IP_2 }} key 1
+ntp access-group peer NTP_ACL
+!
+!
+!========================================================================================================
+!                                         TACACS+
+!========================================================================================================
+aaa new-model
+aaa session-id common
+!
+tacacs server TACACS_{{ TACACS_SRV_1_IP }}
+ address ipv4 {{ TACACS_SRV_1_IP }}
+ key {{ TACACS_PSK }}
+ timeout 4
+ single-connection
+ exit
+!
+tacacs server TACACS_{{ TACACS_SRV_2_IP }}
+ address ipv4 {{ TACACS_SRV_2_IP }}
+ key {{ TACACS_PSK }}
+ timeout 4
+ single-connection
+ exit
+!
+!
+aaa group server tacacs+ TACACS_GRP
+ server name TACACS_{{ TACACS_SRV_1_IP }}
+ server name TACACS_{{ TACACS_SRV_2_IP }}
+ exit
+!
+!
+ip tacacs source-interface vlan {{ MGMT_VLAN_ID }}
+!
+aaa authentication fail-message  * LOGIN FAILED *
+aaa authentication login default local
+aaa authentication login TACACS_AUTHEN group TACACS_GRP local
+aaa authentication enable default group TACACS_GRP enable
+aaa authorization config-commands
+aaa authorization exec default local
+aaa authorization exec TACACS_AUTHOR group TACACS_GRP local if-authenticated
+aaa authorization commands 15 TACACS_CMDS group TACACS_GRP local if-authenticated
+aaa authorization commands 7 TACACS_CMDS group TACACS_GRP local if-authenticated
+aaa accounting update newinfo periodic 2880
+aaa accounting exec default start-stop group TACACS_GRP
+aaa accounting commands 15 default start-stop group TACACS_GRP
+aaa accounting commands 7 default start-stop group TACACS_GRP
+aaa authorization console
+aaa login display number-failures
+aaa login success-track-conf-time 1
+!
 line vty 0 15
  access-class MGMT_ACL in vrf-also
  login authentication TACACS_AUTHEN
@@ -394,22 +415,7 @@ line vty 0 15
  exec-timeout 5 0
  logging synchronous
  exit
-!
-!
-access-list standard NTP_ACL
- 10 permit ip {{ NTP_SERVER_IP_1 }}
- 20 permit ip {{ NTP_SERVER_IP_2 }}
- 100 deny any
- exit
-!
-ntp authenticate
-ntp authentication-key 1 md5 {{ NTP_KEY }}
-ntp trusted-key 1
-ntp access-group peer NTP_ACL
-ntp server {{ NTP_SERVER_IP_1 }} key 1 source vlan {{ MGMT_VLAN_ID }}
-ntp server {{ NTP_SERVER_IP_2 }} key 1 source vlan {{ MGMT_VLAN_ID }}
-!
-!
+
 !========================================================================================================
 !                                   IBNS2.0 - RADIUS 802.1X
 !========================================================================================================
@@ -453,7 +459,9 @@ ip access-list extended WEB_AUTH_REDIRECT
  exit
 !
 !
+aaa new-model
 aaa session-id common
+authentication convert-to new-style
 aaa authentication dot1x default group RADIUS_GRP
 aaa authorization network default group RADIUS_GRP
 aaa authorization auth-proxy default group RADIUS_GRP
@@ -686,8 +694,9 @@ interface range Gigabit0/1 - 24
  switchport port-security violation restrict
  device-tracking attach-policy IPDT_POLICY
  ip dhcp snooping limit rate 15
- source template ACCESS_DOT1X_MAB_CLOSED  !REMOVE THIS IF WIRED 802.1X IS NOT CONFIGURED IN THE NETWORK
  no snmp trap link-status
+ source template ACCESS_DOT1X_MAB_CLOSED  !REMOVE THIS IF WIRED 802.1X IS NOT CONFIGURED IN THE NETWORK
+
 !
 !
 !
@@ -703,10 +712,10 @@ interface range Gigabit0/25
  storm-control multicast level 10
  storm-control action trap
  spanning-tree guard loop
- ip dhcp snooping trust
  load-interval 60
  udld mode aggressive
  ip arp inspection trust
+ ip dhcp snooping trust
 !
 !
 !
@@ -760,7 +769,6 @@ interface port-channel 10
 !#########################################################################################################
 !
 template TRUNK_FLEX_AP
- description ** Trunk - AP
  switchport mode trunk
  switchport nonegotiate
  storm-control broadcast level 20
@@ -768,7 +776,6 @@ template TRUNK_FLEX_AP
  storm-control action trap
 !
 template TRUNK_UPLINK
- description -> TRUNK - UPLINK
  switchport mode trunk
  switchport nonegotiate
  storm-control broadcast level 10
@@ -776,10 +783,8 @@ template TRUNK_UPLINK
  storm-control action trap
  spanning-tree guard loop
  ip dhcp snooping trust
- load-interval 60
 !
 template ACCESS_NOAUTH
- description -> Access - No Auth with Vlan-999
  switchport nonegotiate
  switchport mode access
  switcport access vlan 999

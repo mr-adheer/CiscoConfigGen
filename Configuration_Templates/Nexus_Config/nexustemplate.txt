@@ -1,0 +1,203 @@
+! ========================================================================================================================
+!
+!                                             NEXUS SWITCH - 1
+!
+! ========================================================================================================================
+!
+feature vpc
+feature lacp
+!
+! ==================================================== KEEPALIVE LINK ====================================================
+!
+!
+vlan { VPC_KEEPALIVE_VLAN }
+ name VPC_KEEPALIVE
+!
+vrf context VPC_KEEPALIVE
+!
+interface { VPC_KEEPALIVE_PORT_1 }
+ description ** VPC KEEPALIVE to { VPC_KEEPALIVE_PORT_2 }
+ channel-group { VPC_KEEPALIVE_PORTCHANNEL } mode active
+!
+interface { VPC_KEEPALIVE_PORT_2 }
+ description ** VPC KEEPALIVE to { VPC_KEEPALIVE_PORT_1 }
+ channel-group { VPC_KEEPALIVE_PORTCHANNEL } mode active
+!
+interface portchannel { VPC_KEEPALIVE_PORTCHANNEL }
+ description ** VPC KEEPALIVE
+ switchport mode access
+ switchport access vlan { VPC_KEEPALIVE_VLAN }
+!
+interface vlan { VPC_KEEPALIVE_VLAN }
+ description ** VPC KEEPALIVE SVI
+ vrf member VPC_KEEPALIVE
+ ip address { VPC_KEEPALIVE_IP_1 } { VPC_KEEPALIVE MASK }
+
+! ====================================================== PEER LINK ==========================================================
+
+interface { VPC_PEERLINK_PORT_1 }
+ description ** VPC PEERLINK to { VPC_PEERLINK_PORT_2 }
+ channel-group { VPC_PEERLINK_PORTCHANNEL } mode active
+!
+interface { VPC_PEERLINK_PORT_2 }
+ description ** VPC PEERLINK to { VPC_PEERLINK_PORT_1 }
+ channel-group { VPC_PEERLINK_PORTCHANNEL } mode active
+!
+interface portchannel { VPC_PEERLINK_PORTCHANNEL }
+ description ** VPC PEERLINK
+ switchport mode trunk
+ vpc peer-link
+
+! =================================================== VPC CONFIG =============================================================
+
+feature vpc
+ vpc domain 10
+ peer-keepalive destination { VPC_KEEPALIVE_IP_2 } source { VPC_KEEPALIVE_IP_1 } vrf VPC_KEEPALIVE
+ peer-gateway
+ peer-switch
+ delay restore 360
+ auto-recovery
+ graceful consistency-check
+ ip arp synchronize
+
+! ========================================================================================================================
+!
+!                                             NEXUS SWITCH - 2
+!
+! ========================================================================================================================
+!
+feature vpc
+feature lacp
+!
+! =================================================== KEEPALIVE LINK ====================================================
+!
+!
+vlan { VPC_KEEPALIVE_VLAN }
+ name VPC_KEEPALIVE
+!
+vrf context VPC_KEEPALIVE
+!
+interface { VPC_KEEPALIVE_PORT_1 }
+ description ** VPC KEEPALIVE to { VPC_KEEPALIVE_PORT_2 }
+ channel-group { VPC_KEEPALIVE_PORTCHANNEL } mode active
+!
+interface { VPC_KEEPALIVE_PORT_2 }
+ description ** VPC KEEPALIVE to { VPC_KEEPALIVE_PORT_1 }
+ channel-group { VPC_KEEPALIVE_PORTCHANNEL } mode active
+!
+interface portchannel { VPC_KEEPALIVE_PORTCHANNEL }
+ description ** VPC KEEPALIVE
+ switchport mode access
+ switchport access vlan { VPC_KEEPALIVE_VLAN }
+!
+interface vlan { VPC_KEEPALIVE_VLAN }
+ description ** VPC KEEPALIVE
+ vrf member VPC_KEEPALIVE
+ ip address { VPC_KEEPALIVE_IP_2 } { VPC_KEEPALIVE MASK }
+
+!
+interface { VPC_PEERLINK_PORT_1 }
+ description ** VPC PEERLINK to { VPC_PEERLINK_PORT_2 }
+ channel-group { VPC_PEERLINK_PORTCHANNEL } mode active
+!
+interface { VPC_PEERLINK_PORT_2 }
+ description ** VPC PEERLINK to { VPC_PEERLINK_PORT_1 }
+ channel-group { VPC_PEERLINK_PORTCHANNEL } mode active
+!
+interface portchannel { VPC_PEERLINK_PORTCHANNEL }
+ description ** VPC PEERLINK
+ switchport mode trunk
+ vpc peer-link
+!
+feature vpc
+ vpc domain 10
+ peer-keepalive destination { VPC_KEEPALIVE_IP_1 } source { VPC_KEEPALIVE_IP_2 } vrf VPC_KEEPALIVE
+ peer-gateway
+ peer-switch
+ delay restore 360
+ auto-recovery
+ graceful consistency-check
+ ip arp synchronize
+
+===== sw_1 ==
+interface port-channel 10
+  description VPC 10
+  switchport mode trunk
+  switchport trunk allowed vlan 10,20
+  switchport trunk native vlan 100
+  spanning-tree port type edge trunk
+  no lacp suspend-individual
+  vpc 10
+
+interface Ethernet1/20
+  description VPC 10
+  lacp rate fast
+  switchport mode trunk
+  switchport trunk allowed vlan 10,20
+  switchport trunk native vlan 100
+  spanning-tree port type edge trunk
+  channel-group 10 mode active
+
+===== sw_2 ==
+interface port-channel 10
+  description VPC 10
+  switchport mode trunk
+  switchport trunk allowed vlan 10,20
+  switchport trunk native vlan 100
+  spanning-tree port type edge trunk
+  no lacp suspend-individual
+  vpc 10
+
+interface Ethernet1/20
+  description VPC 10
+  lacp rate fast
+  switchport mode trunk
+  switchport trunk allowed vlan 10,20
+  switchport trunk native vlan 100
+  spanning-tree port type edge trunk
+  channel-group 10 mode active
+
+ =================================
+ip domain-name { domain name }
+!
+feature ssh
+ssh key rsa 2048
+!
+ssh login-attempts 4
+!
+!
+feature tacacs+
+!
+tacacs-server host { TACACS_SERVER_1 } key { TACACS KEY }
+tacacs-server host { TACACS_SERVER_2 } key { TACACS KEY }
+!
+tacacs-server timeout 15
+tacacs-server deadtime 5
+!
+aaa group server tacacs+ TACACS_GRP
+  server { TACACS_SERVER_1 }
+  server { TACACS_SERVER_2 }
+  deadtime 10
+  use-vrf management
+  source-interface management0
+!
+username { LOCAL_ADMIN_USER } password { LOCAL_ADMIN_PASSWORD } role network-admin
+!
+aaa authentication login default group TACACS_GRP local
+aaa authentication login console local
+aaa authentication login error-enable
+aaa authentication login default fallback error local
+aaa authorization commands default group TACACS_GRP
+aaa authorization config-commands default group TACACS_GRP
+aaa accounting default group TACACS_GRP
+tacacs-server host { TACACS_SERVER_1 } TACACSServerTest username testuser password testpassword idle-time 3
+tacacs-server host { TACACS_SERVER_2 } TACACSServerTest username testuser password testpassword idle-time 3
+!
+ip tacacs source-interface management0
+!
+logging server { SYSLOG_SERVER } 6 use-vrf management
+logging logfile messages 6 size 16384
+logging source-interface Loopback 0
+logging timestamp milliseconds
+no logging console
+no logging monitor

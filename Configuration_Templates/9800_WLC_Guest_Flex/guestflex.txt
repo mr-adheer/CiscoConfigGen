@@ -1,0 +1,51 @@
+!================= {{ DEVICE_TYPE }} 802.1x with FLEX CONFIG ============
+!   {{ DEVICE_MODEL }} CONFIGURAITON SCRIPT FOR {{ ORG_NAME }}
+!   BRANCH NAME = {{ BRANCH_NAME }} , BRANCH ID = {{ BRANCH_ID }}
+!========================================================================
+!
+config t
+!
+wlan {{ GUEST_SSID_NAME }}_WLAN_Prof {{ GUEST_SSID_WLAN_ID }} {{ GUEST_SSID_NAME }}
+ mac-filtering RADIUS_AUTHZ
+ no security ft adaptive
+ no security wpa
+ no security wpa wpa2
+ no security wpa wpa2 ciphers aes
+ no security wpa akm dot1x
+ no shutdown
+!
+wireless profile policy {{ GUEST_SSID_NAME }}_{{ SITE_1_NAME  }}_PolicyProf_Flex
+ aaa override
+ no central association
+ no central dhcp
+ no central switching
+ vlan {{ SITE_1_SSID_DEF_VLAN_ID_1 }}
+ dhcp-tlv-caching
+ http-tlv-caching
+ idle-timeout 7200
+ nac
+ radius-profiling
+ session-timeout 43200
+ accounting-list RADIUS_ACCNT
+ no shutdown
+!
+wireless profile flex {{ SITE_1_NAME  }}_Flex-Prof
+ native-vlan-id {{ SITE_1_AP_MGMT_VLAN_ID }}
+ vlan-name {{ SITE_1_VLAN_NAME_1 }}
+  vlan-id {{ SITE_1_VLAN_ID_1 }}
+ vlan-name {{ SITE_1_VLAN_NAME_2 }}
+  vlan-id {{ SITE_1_VLAN_ID_2 }}
+
+!
+wireless tag policy {{ SITE_1_NAME  }}_Pol_Tag
+ wlan {{ GUEST_SSID_NAME }}_WLAN_Prof policy {{ GUEST_SSID_NAME }}_{{ SITE_1_NAME }}_PolicyProf_Flex
+!
+wireless tag site {{ SITE_1_NAME  }}_Site_Tag
+ no local-site
+ flex-profile {{ SITE_1_NAME  }}_Flex-Prof
+!
+!======= APPLY TAGS TO ACCESS POINTS - SAMPLE GIVEN BELOW ======
+!
+ap aaaa.aaaa.aaaa
+ policy-tag  {{ SITE_1_NAME }}_Pol_Tag
+ site-tag {{ SITE_1_NAME }}_Site_Tag

@@ -7,8 +7,9 @@
 !     ||                   ||
 !     ||====>|CORESW|<=====||
 
-! ============= HA CONFIGURATION ================
-! ================ WLC - 1 ======================
+!========================================================================================================
+!                                       HA Configuration ( WLC-1 )
+!========================================================================================================
 !
 config t
 !
@@ -59,7 +60,9 @@ wr
 !
 reload
 
-!============= WLC - 2 ==========================
+!========================================================================================================
+!                                       HA Configuration ( WLC-2 )
+!========================================================================================================
 !
 config t
 !
@@ -115,10 +118,11 @@ wr
 reload
 !
 !==============================================================================================================
-!============================================ WLC GENRLAL CONFIG ==============================================
+!                                           WLC GENRLAL CONFIG
 !==============================================================================================================
 !
 hostname {{ HOSTNAME }}
+!
 service nagle
 no service pad
 no service config
@@ -131,24 +135,27 @@ service password-encryption
 
 logging discriminator FILTER msg-body drops Configured programmatically by process SEP_webui_wsma_http
 logging buffered discriminator FILTER 16777216 informational
-no logging console
 !
 memory reserve critical 4096
 memory free low-watermark processor 40000
 !
+no logging monitor
+no logging console
 logging buffered warnings
-logging buffered 4096
-logging console informational
-logging monitor informational
+logging buffered size 10485760
 logging trap informational
 logging history informational
-logging host {{ SYSLOG_SERVER_1_IP }}
-logging host {{ SYSLOG_SERVER_2_IP }}
+logging snmp-authfail
+logging source-interface vlan {{ MGMT_VLAN_ID }}
+logging host {{ SYSLOG_SERVER_1_IP }} transport udp port {{ SYSLOG_SERVER_1_PORT }}
+logging host {{ SYSLOG_SERVER_2_IP }} transport udp port {{ SYSLOG_SERVER_2_PORT }}
 !
 clock timezone IST 5 30
 !
 password encryption aes
 !
+key config-key password-encryption {{ AES_ENCRYPTION_KEY }}
+password encryption aes
 !
 aaa common-criteria policy PASSWORD_POLICY
  min-length 8
@@ -159,26 +166,11 @@ aaa common-criteria policy PASSWORD_POLICY
  special-case 1
  char-changes 4
 !
-username {{ ADMIN_USERNAME }} privilege 1 common-criteria-policy PASSWORD_POLICY algorithm-type sha256 secret {{ ADMIN_SECRET }}
-enable common-criteria-policy PASSWORD_POLICY algorithm-type sha256 secret level 15  {{ ENABLE_SECRET }}
+! use Type9 password encryption
+username {{ LOCAL_USERNAME_15 }} privilege 15 common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret {{ LOCAL_SECRET_15 }}
+username {{ LOCAL_USERNAME_7 }} privilege 7  common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret {{ LOCAL_SECRET_7 }}
+enable common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret level 15  {{ ENABLE_SECRET }}
 !
-tacacs server TACACS_{{ TACACS_SRV_1_IP }}
- address ipv4 {{ TACACS_SRV_1_IP }}
- key {{ TACACS_PSK }}
- timeout 4
-!
-tacacs server TACACS_{{ TACACS_SRV_2_IP }}
- address ipv4 {{ TACACS_SRV_2_IP }}
- key {{ TACACS_PSK }}
- timeout 4
-!
-!
-aaa group server tacacs+ TACACS_GRP
- server name TACACS_{{ TACACS_SRV_1_IP }}
- server name TACACS_{{ TACACS_SRV_2_IP }}
-!
-!
-ip tacacs source-interface vlan {{ MGMT_VLAN_ID }}
 !
 radius server RADIUS_{{ RADIUS_SRV_1_IP }}
  address ipv4 {{ RADIUS_SRV_1_IP }} auth-port 1812 acct-port 1813
@@ -206,25 +198,14 @@ radius-server dead-criteria time 5 tries 3
 radius-server deadtime 3
 !
 aaa authentication dot1x RADIUS_AUTHEN group RADIUS_GRP
-aaa authorization network RADIUS_AUTHOR group RADIUS_GRP
+aaa authorization network RADIUS_AUTHZ group RADIUS_GRP
 aaa accounting identity RADIUS_ACCNT start-stop group RADIUS_GRP
-aaa authentication login default local
-aaa authentication login TACACS_AUTHEN group TACACS_GRP local
-aaa authentication enable default enable
-aaa authorization exec default local if-authenticated
-aaa authorization exec TACACS_AUTHOR group TACACS_GRP local if-authenticated
-aaa authorization commands 15 TACACS_CMDS group TACACS_GRP local if-authenticated
-aaa authorization commands 7 TACACS_CMDS group TACACS_GRP local if-authenticated
-aaa authorization console
-aaa accounting update newinfo periodic 2880
 aaa accounting identity default start-stop group RADIUS_GRP
-aaa accounting exec default start-stop group TACACS_GRP
-aaa accounting commands 7 default start-stop group TACACS_GRP
-aaa accounting commands 15 default start-stop group TACACS_GRP
 aaa accounting network default start-stop group RADIUS_GRP
 aaa accounting system default start-stop group RADIUS_GRP
-aaa login display number-failures
-aaa login success-track-conf-time 1
+aaa server radius dynamic-author
+
+!
 aaa common-criteria policy PASSWORD_POLICY
 !
 login block-for 120 attempts 3 within 30
@@ -304,7 +285,7 @@ ip http secure-server
 ip http authentication local
 ! === or ====
 ip http authentication aaa login-authentication TACACS_AUTHEN
-ip http authentication aaa exec-authorization TACACS_AUTHOR
+ip http authentication aaa exec-authorization TACACS_AUTHZ
 ip http client source-interface {{ MGMT_VLAN_ID }}
 !
 ip access-list standard MGMT_ACL
@@ -345,7 +326,7 @@ line vty 0 15
  access-class MGMT_ACL in vrf-also
  authorization commands 15 TACACS_CMDS
  authorization commands 7 TACACS_CMDS
- authorization exec TACACS_AUTHOR
+ authorization exec TACACS_AUTHZ
  login authentication group TACACS_AUTHEN
  transport preferred none
  transport input ssh
@@ -392,12 +373,12 @@ banner login ^
 |
 |         > THIS SYSTEM IS THE PROPERTY OF {{ ORG_NAME }}.
 |
-|         > ACCESS TO THIS SYSTEM IS FOR AUTHORISED USERS ONLY AND
-|           UNAUTHORIZED ACCESS IS PROHIBITED.
+|         > ACCESS TO THIS SYSTEM IS FOR AUTHZISED USERS ONLY AND
+|           UNAUTHZIZED ACCESS IS PROHIBITED.
 |
 |         > YOUR ACCESS IS MONITORED FOR COMPLIANCE TO IT POLICY.
 |
-|         > UNAUTHORIZED ACCESS WILL RESULT IN ACTION AS PER IT POLICY
+|         > UNAUTHZIZED ACCESS WILL RESULT IN ACTION AS PER IT POLICY
 |           AND LAW.
 |
 |
@@ -424,4 +405,37 @@ parameter-map type webauth global
  webauth-http-enable
  intercept-https-enable
 !
+!========================================================================================================
+!                                         TACACS+
+!========================================================================================================
+tacacs server TACACS_{{ TACACS_SRV_1_IP }}
+ address ipv4 {{ TACACS_SRV_1_IP }}
+ key {{ TACACS_PSK }}
+ timeout 4
+!
+tacacs server TACACS_{{ TACACS_SRV_2_IP }}
+ address ipv4 {{ TACACS_SRV_2_IP }}
+ key {{ TACACS_PSK }}
+ timeout 4
+!
+!
+aaa group server tacacs+ TACACS_GRP
+ server name TACACS_{{ TACACS_SRV_1_IP }}
+ server name TACACS_{{ TACACS_SRV_2_IP }}
 
+ip tacacs source-interface vlan {{ MGMT_VLAN_ID }}
+!
+aaa authentication login default local
+aaa authentication login TACACS_AUTHEN group TACACS_GRP local
+aaa authentication enable default enable
+aaa authorization exec default local if-authenticated
+aaa authorization exec TACACS_AUTHZ group TACACS_GRP local if-authenticated
+aaa authorization commands 15 TACACS_CMDS group TACACS_GRP local if-authenticated
+aaa authorization commands 7 TACACS_CMDS group TACACS_GRP local if-authenticated
+aaa authorization console
+aaa accounting update newinfo periodic 2880
+aaa accounting exec default start-stop group TACACS_GRP
+aaa accounting commands 7 default start-stop group TACACS_GRP
+aaa accounting commands 15 default start-stop group TACACS_GRP
+aaa login display number-failures
+aaa login success-track-conf-time 1

@@ -1,11 +1,12 @@
-!================= {{ DEVICE_TYPE }} CONFIG CREATED ON = {{ TODAY_DATE_TIME }} =============================
+!================================================================================================================
+!               {{ DEVICE_TYPE | default('L2_Switch') }} -- {{ HOSTNAME | default('Blr_l2_switch') }} -- {{ MGMT_VLAN_IP | default('192.168.0.100') }}
 !
-!               {{ DEVICE_MODEL }} CONFIGURAITON SCRIPT FOR {{ORG_NAME }}
-!                BRANCH NAME = {{ BRANCH_NAME }} , BRANCH ID = {{ BRANCH_ID }}
+!            {{ DEVICE_MODEL | default('Cat9300') }} CONFIGURAITON SCRIPT FOR {{ORG_NAME | default('Client_Name')  }}
+!             BRANCH NAME = {{ BRANCH_NAME| default('BLR_Branch')  }} , BRANCH ID = {{ BRANCH_ID | default('20192') }}
 !
 !================================================================================================================
 !
-hostname {{ HOSTNAME }}
+hostname {{ HOSTNAME | default('Blr_l2_switch') }}
 !
 service timestamps debug datetime msec localtime show-timezone
 service timestamps log datetime msec localtime show-timezone
@@ -35,29 +36,137 @@ software auto-upgrade enable
 exception crashinfo maximum files 2
 ip icmp rate-limit unreachable 500
 no ip source-route
-
+clock timezone IST 5 30
 !
 memory free low-watermark processor 20000
 memory free low-watermark io 20000
 memory reserved critical 1000
 !
-no logging monitor
-no logging console
-logging buffered warnings
-logging buffered size 10485760
-logging trap informational
-logging history informational
-logging snmp-authfail
-logging source-interface vlan {{ MGMT_VLAN_ID }}
-logging host {{ SYSLOG_SERVER_1_IP }} transport udp port {{ SYSLOG_SERVER_1_PORT }}
-logging host {{ SYSLOG_SERVER_2_IP }} transport udp port {{ SYSLOG_SERVER_2_PORT }}
 !
-ip domain name {{ VTP_DOMAIN_NAME }}
-vtp mode transparent
 !
-clock timezone IST 5 30
 !
-key config-key password-encryption {{ AES_ENCRYPTION_KEY }}
+!
+!==================== BANNERS ====================
+banner exec ^
+
+
+|===============================  N O T I C E  ==============================
+|
+|
+|          YOU ARE LOGGED IN TO DEVICE THAT BELONGS TO {{ ORG_NAME | default('Client_Name') }}
+|
+|
+|          ------>>   $(hostname) on line-VTY/TTY $(line)  <<-------
+|
+|
+|
+|         *** ACCESS TO THIS SYSTEM IS PROHIBITED UNLESS AUTHORISED ***
+|
+|        If you are not authorised please disconnect now. Any attempt for
+|        unauthorized access will be logged and appropriate legal action
+|        will be taken.
+|
+|
+|============================================================================
+
+
+^
+!
+banner login ^
+
+
+|============================================================================
+|
+|                               W A R N I N G
+|                               =============
+|
+|                          READ BEFORE PROCEEDING
+|
+|
+|         THIS SYSTEM IS THE PROPRITORY OF {{ ORG_NAME | default('Client_Name') }}.
+|
+|         THIS SYSTEM IS FOR AUTHORISED USERS ONLY.
+|         UNAUTHORIZED ACCESS IS PROHIBITED.
+|
+|         YOUR ACCESS IS MONITORED FOR COMPLIANCE TO IT POLICY.
+|
+|         UNAUTHORIZED ACCESS WILL RESULT IN ACTION AS PER IT POLICY AND LAW
+|
+|============================================================================
+
+
+^
+!
+!==================== LOGIN LOCAL ====================
+!
+!
+privilege exec level 7 copy running-config
+privilege exec level 7 copy
+privilege exec level 7 verify
+privilege exec level 7 traceroute
+privilege exec level 7 ping ip
+privilege exec level 7 ping
+privilege exec level 15 configure terminal
+privilege exec level 15 configure
+privilege exec level 7 show ip route
+privilege exec level 7 show ip
+privilege exec level 7 show processes
+privilege exec level 7 show running-config
+privilege exec level 7 show configuration
+privilege exec level 7 show logging
+privilege exec level 7 show
+privilege exec level 7 clear counters
+privilege exec level 7 clear
+!
+aaa new-model
+aaa session-id common
+!
+aaa authentication fail-message  * LOGIN FAILED *
+aaa authentication login default local
+aaa authorization exec default local if-authenticated
+aaa authentication enable default enable
+aaa authorization config-commands
+aaa accounting update newinfo periodic 2880
+aaa authorization console
+aaa login display last-success
+aaa login display last-failure
+aaa login display number-failures
+aaa login success-track-conf-time 0
+!
+ip access-list standard MGMT_ACL
+! -> EDIT THE ACL AS REQUIRED <-
+ 10 permit 10.0.0.0 0.255.255.255 log
+ 20 permit 172.16.0.0 0.0.31.255 log
+ 39 permit 192.168.0.0 0.0.255.255 log
+ 100 deny any log
+ exit
+!
+line vty 0 15
+ access-class MGMT_ACL in vrf-also
+ login authentication default
+ authorization exec default
+ transport preferred none
+ transport input ssh
+ transport output none
+ exec-timeout 5 0
+ logging synchronous
+ exit
+!
+!
+line con 0
+ exec-timeout 5 0
+ login authentication default
+ logging synchronous
+ exit
+
+!==================== LOGIN RESTRICTION ====================
+login block-for 120 attempts 3 within 30
+login on-failure log every 1
+login on-success log every 1
+login delay 3
+!
+!
+key config-key password-encryption {{ AES_ENCRYPTION_KEY | default('@e5K3y@0071') }}
 password encryption aes
 !
 boot system flash:packages.conf
@@ -72,23 +181,22 @@ aaa common-criteria policy PASSWORD_POLICY
  char-changes 4
 !
 ! use Type9 password encryption
-username {{ LOCAL_USERNAME_15 }} privilege 15 common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret {{ LOCAL_SECRET_15 }}
-username {{ LOCAL_USERNAME_7 }} privilege 7  common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret {{ LOCAL_SECRET_7 }}
-enable common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret level 15  {{ ENABLE_SECRET }}
+username {{ LOCAL_USERNAME_15 | default('adminuser') }} privilege 15 common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret {{ LOCAL_SECRET_15 | default('adminpass') }}
+username {{ LOCAL_USERNAME_7 | default('nonadminuser') }} privilege 7  common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret {{ LOCAL_SECRET_7 | default('nonadminpass') }}
+enable common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret level 15  {{ ENABLE_SECRET | default('enablepass') }}
 !
 !
-login block-for 120 attempts 3 within 30
-login on-failure log every 1
-login on-success log every 1
-login delay 3
-!
-!
-ip name-server {{ DNS_SERVER_IP_1 }} {{ DNS_SERVER_IP_2 }}
+!==================== DNS ====================
+ip name-server {{ DNS_SERVER_IP_1 | default('4.2.2.2') }} {{ DNS_SERVER_IP_2 | default('8.8.8.8') }}
 no ip domain-lookup
-ip domain name {{ DOMAIN_NAME }}
+ip domain name {{ DOMAIN_NAME | default('clientname.com') }}
 !
 !
+!==================== VTP ====================
+ip domain name {{ VTP_DOMAIN_NAME | default('VTPDOM') }}
+vtp mode transparent
 !
+!==================== CONFIG BACKUP & ARCHIVE ====================
 archive
  log config
   logging enable
@@ -100,10 +208,30 @@ archive
   time-period 1440
   write-memory
 !
+kron occurrence one-month at 11:59 1 recurring
+ policy-list save
+ exit
 !
-interface vlan {{ MGMT_VLAN_ID }}
+kron occurrence Backup at 12:00 1 recurring
+ policy-list CONFIGURATION_BACKUP
+ exit
+!
+kron policy-list save
+ cli write
+ exit
+!
+kron policy-list CONFIGURATION_BACKUP
+ cli archive config
+ exit
+!
+!========================= MGMT ACCESS ===============================
+!
+vlan {{ MGMT_VLAN_ID | default('100') }}
+ name {{ MGMT_VLAN_NAME | default('MGMT') }}_{{ MGMT_VLAN_ID | default('100') }}
+!
+interface vlan {{ MGMT_VLAN_ID | default('100') }}
  description == SVI - MGMT ==
- ip address {{ MGMT_VLAN_IP }} {{ MGMT_VLAN_MASK }}
+ ip address {{ MGMT_VLAN_IP | default('192.168.0.100') }} {{ MGMT_VLAN_MASK | default('255.255.255.0') }}
  no ip redirects
  no ip unreachables
  no ip proxy-arp
@@ -113,7 +241,7 @@ interface vlan {{ MGMT_VLAN_ID }}
  exit
 !
 no ip routing
-ip default-gateway {{ MGMT_VLAN_GW }}
+ip default-gateway {{ MGMT_VLAN_GW | default('192.168.0.1') }}
 !
 ip access-list standard HTTP_ACL
  100 deny any log
@@ -127,6 +255,31 @@ ip http secure-active-session-modules none
 !
 !
 !
+crypto key generate rsa modulus 4096 label SSH-KEY-RSA-4096
+ip ssh logging events
+ip ssh version 2
+ip ssh time-out 60
+ip ssh authentication-retries 3
+ip ssh rsa keypair-name SSH-KEY-RSA-4096
+ip ssh server algorithm authentication keyboard
+ip ssh server algorithm kex ecdh-sha2-nistp521 ecdh-sha2-nistp384
+ip ssh server algorithm hostkey rsa-sha2-512 rsa-sha2-256
+ip ssh server algorithm encryption aes256-gcm aes256-ctr
+ip ssh server algorithm mac hmac-sha2-512 hmac-sha2-256
+ip ssh server algorithm publickey ecdsa-sha2-nistp521 ecdsa-sha2-nistp384 rsa-sha2-512
+ip ssh source-interface Vlan {{ MGMT_VLAN_ID | default('100') }}
+!
+!
+ip access-list standard MGMT_ACL
+! -> EDIT THE ACL AS REQUIRED <-
+ 10 permit 10.0.0.0 0.255.255.255 log
+ 20 permit 172.16.0.0 0.0.31.255 log
+ 39 permit 192.168.0.0 0.0.255.255 log
+ 100 deny any log
+ exit
+!
+!
+!========================= DEVICE TRACKING ===============================
 device-tracking tracking auto-source
 !
 device-tracking policy IPDT_POLICY
@@ -173,73 +326,44 @@ errdisable recovery interval 300
 cdp run
 lldp run
 !
-access-session attributes filter-list list Def_Acct_List
- cdp
- lldp
- dhcp
- http
- exit
-!
-access-session accounting attributes filter-spec include list Def_Acct_List
-!
 !
 no macro auto monitor
+
 !
-crypto key generate rsa modulus 4096 label SSH-KEY-RSA-4096
-ip ssh logging events
-ip ssh version 2
-ip ssh time-out 60
-ip ssh authentication-retries 3
-ip ssh rsa keypair-name SSH-KEY-RSA-4096
-ip ssh server algorithm authentication keyboard
-ip ssh server algorithm kex ecdh-sha2-nistp521 ecdh-sha2-nistp384
-ip ssh server algorithm hostkey rsa-sha2-512 rsa-sha2-256
-ip ssh server algorithm encryption aes256-gcm aes256-ctr
-ip ssh server algorithm mac hmac-sha2-512 hmac-sha2-256
-ip ssh server algorithm publickey ecdsa-sha2-nistp521 ecdsa-sha2-nistp384 rsa-sha2-512
-ip ssh source-interface Vlan {{ MGMT_VLAN_ID }}
+!==================== DHCP SNOOPING & ARP INSPECTION ====================
 !
-!
-ip access-list standard MGMT_ACL
-! -> EDIT THE ACL AS REQUIRED <-
- 10 permit 10.0.0.0 0.255.255.255 log
- 20 permit 172.16.0.0 0.0.31.255 log
- 39 permit 192.168.0.0 0.0.255.255 log
- 100 deny any log
- exit
-!
-ip dhcp snooping
 no ip dhcp snooping information option
-ip dhcp snooping vlan {{ DHCP_SNOOPING_VLANS }}
+ip dhcp snooping
+ip dhcp snooping vlan {{ DHCP_SNOOPING_VLANS  | default('10,20,30') }}
 !
-ip arp inspection vlan {{ DHCP_SNOOPING_VLANS }}
-!
-kron occurrence one-month at 11:59 1 recurring
- policy-list save
- exit
-!
-kron occurrence Backup at 12:00 1 recurring
- policy-list CONFIGURATION_BACKUP
- exit
-!
-kron policy-list save
- cli write
- exit
-!
-kron policy-list CONFIGURATION_BACKUP
- cli archive config
- exit
+ip arp inspection vlan {{ DHCP_SNOOPING_VLANS  | default('10,20,30') }}
 !
 !
+!
+!==================== LOGGING ====================
+no logging monitor
+no logging console
+logging buffered warnings
+logging buffered size 10485760
+logging trap informational
+logging history informational
+logging snmp-authfail
+logging source-interface vlan {{ MGMT_VLAN_ID | default('100') }}
+logging host {{ SYSLOG_SERVER_1_IP | default('1.1.1.1') }} transport udp port {{ SYSLOG_SERVER_1_PORT | default('514') }}
+logging host {{ SYSLOG_SERVER_2_IP | default('1.1.1.2') }} transport udp port {{ SYSLOG_SERVER_2_PORT | default('514') }}
+!
+!
+!
+!==================== SNMP ====================
 ip access-list standard SNMP_ACL
- permit host {{ SNMP_SERVER_IP_1 }} log
+ permit host {{ SNMP_SERVER_IP_1 | default('10.1.1.120') }} log
  exit
 !
-snmp-server trap-source vlan {{ MGMT_VLAN_ID }}
-snmp-server location {{ SNMP_LOCATION }}
-snmp-server group {{ SNMP_V3_GROUP }} v3 priv access SNMP_ACL
-snmp-server user {{ SNMP_V3_USERNAME }} {{ SNMP_V3_GROUP }} v3 auth sha {{ SNMP_V3_AUTH_KEY }} priv aes 128 {{ SNMP_V3_PRIV_KEY }}
-snmp-server host {{ SNMP_SERVER_IP_1 }} version 3 priv {{ SNMP_V3_USERNAME }}
+snmp-server trap-source vlan {{ MGMT_VLAN_ID | default('100') }}
+snmp-server location {{ BRANCH_NAME | default('Branch')  }}
+snmp-server group {{ SNMP_V3_GROUP_NAME | default('SNMP_GroupName') }} v3 priv access SNMP_ACL
+snmp-server user {{ SNMP_V3_USERNAME | default('SNMPv3User') }} {{ SNMP_V3_GROUP_NAME | default('SNMP_GroupName') }} v3 auth sha {{ SNMP_V3_AUTH_KEY | default('SNMPv3_authpass')  }} priv aes 128 {{ SNMP_V3_PRIV_KEY | default('SNMPv3_privpass')  }}
+snmp-server host {{ SNMP_SERVER_IP_1 | default('10.1.1.120') }} version 3 priv {{ SNMP_V3_USERNAME | default('SNMPv3_User') }}
 snmp-server enable traps
 snmp-server enable traps cpu threshold
 process cpu threshold type total rising 80 interval 5 falling 20 interval 5
@@ -249,82 +373,16 @@ process cpu statistics limit entry-percentage 40 size 300
 snmp ifmib ifindex persist
 snmp mib flash cache
 !
+!==================== UDLD ====================
 udld aggressive
 !
+!==================== STP ====================
 spanning-tree mode rapid-pvst
 !
 spanning-tree extend system-id
 spanning-tree portfast bpduguard default
 spanning-tree loopguard default
 !
-privilege exec level 7 copy running-config
-privilege exec level 7 copy
-privilege exec level 7 verify
-privilege exec level 7 traceroute
-privilege exec level 7 ping ip
-privilege exec level 7 ping
-privilege exec level 15 configure terminal
-privilege exec level 15 configure
-privilege exec level 7 show ip route
-privilege exec level 7 show ip
-privilege exec level 7 show processes
-privilege exec level 7 show running-config
-privilege exec level 7 show configuration
-privilege exec level 7 show logging
-privilege exec level 7 show
-privilege exec level 7 clear counters
-privilege exec level 7 clear
-!
-!
-banner exec ^
-
-
-|===============================  N O T I C E  ==============================
-|
-|
-|          YOU ARE LOGGED IN TO DEVICE THAT BELONGS TO {{ ORG_NAME }}
-|
-|
-|          ------>>   $(hostname) on line-VTY/TTY $(line)  <<-------
-|
-|
-|
-|         *** ACCESS TO THIS SYSTEM IS PROHIBITED UNLESS AUTHORISED ***
-|
-|        If you are not authorised please disconnect now. Any attempt for
-|        unauthorized access will be logged and appropriate legal action
-|        will be taken.
-|
-|
-|============================================================================
-
-
-^
-!
-banner login ^
-
-
-|============================================================================
-|
-|                               W A R N I N G
-|                               =============
-|
-|                          READ BEFORE PROCEEDING
-|
-|
-|         THIS SYSTEM IS THE PROPRITORY OF {{ ORG_NAME }}.
-|
-|         THIS SYSTEM IS FOR AUTHORISED USERS ONLY.
-|         UNAUTHORIZED ACCESS IS PROHIBITED.
-|
-|         YOUR ACCESS IS MONITORED FOR COMPLIANCE TO IT POLICY.
-|
-|         UNAUTHORIZED ACCESS WILL RESULT IN ACTION AS PER IT POLICY AND LAW
-|
-|============================================================================
-
-
-^
 !
 !
 line aux 0
@@ -343,17 +401,17 @@ line con 0
 !
 !
 access-list standard NTP_ACL
- 10 permit ip {{ NTP_SERVER_IP_1 }}
- 20 permit ip {{ NTP_SERVER_IP_2 }}
+ 10 permit ip {{ NTP_SERVER_IP_1 | default('10.10.2.1') }}
+ 20 permit ip {{ NTP_SERVER_IP_2 | default('10.10.2.2')}}
  100 deny any
  exit
 !
 ntp authenticate
-ntp authentication-key 1 md5 {{ NTP_KEY }}
+ntp authentication-key 1 md5 {{ NTP_KEY | default('neppass') }}
 ntp trusted-key 1
-ntp source {{ MGMT_VLAN_ID }}
-ntp server {{ NTP_SERVER_IP_1 }} key 1
-ntp server {{ NTP_SERVER_IP_2 }} key 1
+ntp source {{ MGMT_VLAN_ID | default('100') }}
+ntp server {{ NTP_SERVER_IP_1 | default('10.10.2.1')}} key 1
+ntp server {{ NTP_SERVER_IP_2 | default('10.10.2.2')}} key 1
 ntp access-group peer NTP_ACL
 !
 !
@@ -363,28 +421,28 @@ ntp access-group peer NTP_ACL
 aaa new-model
 aaa session-id common
 !
-tacacs server TACACS_{{ TACACS_SRV_1_IP }}
- address ipv4 {{ TACACS_SRV_1_IP }}
- key {{ TACACS_PSK }}
+tacacs server TACACS_{{ TACACS_SRV_1_IP | default('10.11.1.1')}}
+ address ipv4 {{ TACACS_SRV_1_IP | default('10.11.1.1')}}
+ key {{ TACACS_PSK | default('tacacspass')}}
  timeout 4
  single-connection
  exit
 !
-tacacs server TACACS_{{ TACACS_SRV_2_IP }}
- address ipv4 {{ TACACS_SRV_2_IP }}
- key {{ TACACS_PSK }}
+tacacs server TACACS_{{ TACACS_SRV_2_IP | default('10.11.1.2')}}
+ address ipv4 {{ TACACS_SRV_2_IP | default('10.11.1.2')}}
+ key {{ TACACS_PSK | default('tacacspass')}}
  timeout 4
  single-connection
  exit
 !
 !
 aaa group server tacacs+ TACACS_GRP
- server name TACACS_{{ TACACS_SRV_1_IP }}
- server name TACACS_{{ TACACS_SRV_2_IP }}
+ server name TACACS_{{ TACACS_SRV_1_IP | default('10.11.1.1')}}
+ server name TACACS_{{ TACACS_SRV_2_IP | default('10.11.1.2')}}
  exit
 !
 !
-ip tacacs source-interface vlan {{ MGMT_VLAN_ID }}
+ip tacacs source-interface vlan {{ MGMT_VLAN_ID | default('100') }}
 !
 aaa authentication fail-message  * LOGIN FAILED *
 aaa authentication login default local
@@ -415,44 +473,44 @@ line vty 0 15
  exec-timeout 5 0
  logging synchronous
  exit
-
+!
 !========================================================================================================
 !                                   IBNS2.0 - RADIUS 802.1X
 !========================================================================================================
 !
 !
-radius server RADIUS_{{ RADIUS_SRV_1_IP }}
- address ipv4 {{ RADIUS_SRV_1_IP }} auth-port 1812 acct-port 1813
+radius server RADIUS_{{ RADIUS_SRV_1_IP | default('10.11.1.1')}}
+ address ipv4 {{ RADIUS_SRV_1_IP | default('10.11.1.1')}} auth-port 1812 acct-port 1813
  timeout 4
  retransmit 3
  automate-tester username RADIUSTESTING ignore-acct-port
-  pac key {{ RADIUS_PSK }}
+  pac key {{ RADIUS_PSK | default('Radiuspass')}}
 !
-radius server RADIUS_{{ RADIUS_SRV_2_IP }}
- address ipv4 {{ RADIUS_SRV_2_IP }} auth-port 1812 acct-port 1813
+radius server RADIUS_{{ RADIUS_SRV_2_IP | default('10.11.1.2')}}
+ address ipv4 {{ RADIUS_SRV_2_IP | default('10.11.1.2')}} auth-port 1812 acct-port 1813
  timeout 4
  retransmit 3
  automate-tester username RADIUSTESTING ignore-acct-port
-  pac key {{ RADIUS_PSK }}
+  pac key {{ RADIUS_PSK | default('Radiuspass') }}
 !
-ip radius source-interface vlan {{ MGMT_VLAN_ID }}
+ip radius source-interface vlan {{ MGMT_VLAN_ID | default('100') }}
 !
 aaa group server radius RADIUS_GRP
- server name RADIUS_{{ RADIUS_SRV_1_IP }}
- server name RADIUS_{{ RADIUS_SRV_2_IP }}
- ip radius source-interface vlan {{ MGMT_VLAN_ID }}
+ server name RADIUS_{{ RADIUS_SRV_1_IP | default('10.11.1.1') }}
+ server name RADIUS_{{ RADIUS_SRV_2_IP | default('10.11.1.2') }}
+ ip radius source-interface vlan {{ MGMT_VLAN_ID | default('100') }}
  deadtime 15
 !
 aaa server radius dynamic-author
- client {{ RADIUS_SRV_1_IP }} server-key {{ RADIUS_PSK }}
- client {{ RADIUS_SRV_2_IP }} server-key {{ RADIUS_PSK }}
+ client {{ RADIUS_SRV_1_IP }} server-key {{ RADIUS_PSK | default('Radiuspass') }}
+ client {{ RADIUS_SRV_2_IP }} server-key {{ RADIUS_PSK | default('Radiuspass') }}
  load-balance method least-outstanding batch-size 30
  exit
 !
 !
 ip access-list extended WEB_AUTH_REDIRECT
- 10 deny tcp any host {{ RADIUS_SRV_1_IP }} eq 8443
- 20 deny tcp any host {{ RADIUS_SRV_2_IP }} eq 8443
+ 10 deny tcp any host {{ RADIUS_SRV_1_IP | default('10.11.1.1') }} eq 8443
+ 20 deny tcp any host {{ RADIUS_SRV_2_IP | default('10.11.1.2') }} eq 8443
  30 deny udp any any eq 53
  40 deny udp any any eq 67
  50 permit ip any any
@@ -583,10 +641,10 @@ policy-map type control subscriber DOT1X_MAB_POLICY
             10 authentication-restart 60
 !
 template ACCESS_DOT1X_MAB_OPEN
- description -> Access - DOT1X-MAB - Open Auth with Vlan-999
+ description -> Access - Open_DOT1X-MAB
  switchport nonegotiate
  switchport mode access
- switchport access vlan 999
+ switchport access vlan 1
  dot1x pae authenticator
  dot1x timeout tx-period 7
  dot1x max-reauth-req 2
@@ -616,10 +674,10 @@ template ACCESS_DOT1X_MAB_OPEN
 
 !
 template ACCESS_DOT1X_MAB_CLOSED
- description -> Access - DOT1X-MAB - Closed Auth with Vlan-999
+ description -> Access - Closed_DOT1X-MAB
  switchport nonegotiate
  switchport mode access
- switcport access vlan 999
+ switcport access vlan 1
  dot1x pae authenticator
  dot1x timeout tx-period 7
  dot1x max-reauth-req 3
@@ -648,10 +706,10 @@ template ACCESS_DOT1X_MAB_CLOSED
  ip dhcp snooping limit rate 15
 !
 template ACCESS_NOAUTH
- description -> Access - No Auth with Vlan-999
+ description -> Access No_Auth
  switchport nonegotiate
  switchport mode access
- switcport access vlan 999
+ switcport access vlan 1
  spanning-tree portfast edge
  spanning-tree bpduguard enable
  load-interval 60
@@ -696,7 +754,7 @@ interface range Gigabit0/1 - 24
  ip dhcp snooping limit rate 15
  no snmp trap link-status
  source template ACCESS_DOT1X_MAB_CLOSED  !REMOVE THIS IF WIRED 802.1X IS NOT CONFIGURED IN THE NETWORK
-
+!
 !
 !
 !
@@ -787,7 +845,7 @@ template TRUNK_UPLINK
 template ACCESS_NOAUTH
  switchport nonegotiate
  switchport mode access
- switcport access vlan 999
+ switcport access vlan 1
  spanning-tree portfast edge
  spanning-tree bpduguard enable
  load-interval 60

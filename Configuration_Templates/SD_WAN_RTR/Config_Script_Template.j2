@@ -1,6 +1,6 @@
-!================= {{ DEVICE_TYPE }} CONFIG =============================
-!   {{ DEVICE_MODEL }} CONFIGURAITON SCRIPT FOR {{ORG_NAME }}
-!   BRANCH NAME = {{ BRANCH_NAME }} , BRANCH ID = {{ BRANCH_ID }}
+!================= {{ DEVICE_TYPE | default('ROUTER')  }} CONFIG =============================
+!   {{ DEVICE_MODEL | default('CAT8300')  }} CONFIGURAITON SCRIPT FOR {{ORG_NAME | default('CLIENT_NAME')  }}
+!   BRANCH NAME = {{ BRANCH_NAME | default('BLR')  }} , BRANCH ID = {{ BRANCH_ID | default('10293')  }}
 !========================================================================
 
 pnpa service discovery stop
@@ -9,74 +9,73 @@ config-t
 !
 config-transaction
  system
- system-ip {{ SYS_IP }}
- site-id {{ BRANCH_ID }}
- organization-name "{{ SDWAN_ORG_NAME }}"
- vbond {{ VBOND_FQDN }}
+ system-ip {{ SYS_IP | default('1.1.1.21')  }}
+ site-id {{ BRANCH_ID | default('10293')  }}
+ organization-name "{{ SDWAN_ORG_NAME | default('CLIENT_SDWAN')  }}"
+ vbond {{ VBOND_FQDN | default('VBOND.ORG.CISCO.COM')  }}
 !
-hostname {{ HOSTNAME }}
+hostname {{ HOSTNAME | default('C8K_HOSTNAME')  }}
 !
-username {{ LOCAL_USER }} privelege 15 {{ LOCAL_SECRET }}
+username {{ LOCAL_USER | default('ADMINUSER')  }} privelege 15 {{ LOCAL_SECRET | default('ADMINPASS')  }}
 !
-enable secret {{ ENABLE_SECRET }}
+enable secret {{ ENABLE_SECRET | default('ENABLEPASS')  }}
 !
-interface {{ WAN_INTERFACE_1_ID }}
- description {{ WAN_INTERFACE_1_DESCRIPTION }}
- ip address {{ WAN_INTERFACE_1_IP }} {{ WAN_INTERFACE_1_MASK }}
+interface {{ WAN_INTERFACE_1_ID | default('GigabitEthernet1/1')  }}
+ description {{ WAN_INTERFACE_1_DESCRIPTION | default('ISP_1')  }}
+ ip address {{ WAN_INTERFACE_1_IP | default('11.1.1.20')  }} {{ WAN_INTERFACE_1_MASK | default('255.255.255.252')  }}
  no shutdown
  exit
 !
-interface {{ WAN_INTERFACE_2_ID }}
- description {{ WAN_INTERFACE_2_DESCRIPTION }}
- ip address {{ WAN_INTERFACE_2_IP }} {{ WAN_INTERFACE_2_MASK }}
+interface {{ WAN_INTERFACE_2_ID | default('GigabitEthernet1/0')  }}
+ description {{ WAN_INTERFACE_2_DESCRIPTION | default('ISP_2')  }}
+ ip address {{ WAN_INTERFACE_2_IP | default('12.1.1.30')  }} {{ WAN_INTERFACE_2_MASK | default('255.255.255.229')  }}
  no shutdown
  exit
 !
-interface {{ LAN_INTERFACE_1_ID }}
- description {{ LAN_INTERFACE_1_DESCRIPTION }}
- ip address {{ LAN_INTERFACE_1_IP }} {{ LAN_INTERFACE_1_MASK }}
+interface {{ LAN_INTERFACE_1_ID | default('GigabitEthernet0/0')  }}
+ description {{ LAN_INTERFACE_1_DESCRIPTION | default('LAN_TO_CORE_SW')  }}
+ ip address {{ LAN_INTERFACE_1_IP | default('192.168.1.100') }} {{ LAN_INTERFACE_1_MASK | default('255.255.255.0') }}
  no shutdown
  exit
-! 
+!
 interface Tunnel1
  no shutdown
- ip unnumbered {{ WAN_INTERFACE_1_ID }}
- tunnel source {{ WAN_INTERFACE_1_ID }}
+ ip unnumbered {{ WAN_INTERFACE_1_ID | default('GigabitEthernet1/1')  }}
+ tunnel source {{ WAN_INTERFACE_1_ID | default('GigabitEthernet1/1')  }}
  tunnel mode sdwan
  exit
 !
 interface Tunnel2
  no shutdown
- ip unnumbered {{ WAN_INTERFACE_2_ID }}
- tunnel source {{ WAN_INTERFACE_2_ID }}
+ ip unnumbered {{ WAN_INTERFACE_2_ID | default('GigabitEthernet1/0')  }}
+ tunnel source {{ WAN_INTERFACE_2_ID | default('GigabitEthernet1/0')  }}
  tunnel mode sdwan
  exit
 !
 sdwan
- interface {{ WAN_INTERFACE_1_ID }}
+ interface {{ WAN_INTERFACE_1_ID | default('GigabitEthernet1/1')  }}
   tunnel-interface
   encapsulation ipsec
-  color {{ WAN_INTERFACE_1_COLOR }}
+  color {{ WAN_INTERFACE_1_COLOR | default('MPLS') }}
   exit
  !
- interface {{ WAN_INTERFACE_2_ID }}
+ interface {{ WAN_INTERFACE_2_ID | default('GigabitEthernet1/0')  }}
   tunnel-interface
   encapsulation ipsec
-  color {{ WAN_INTERFACE_2_COLOR }}
+  color {{ WAN_INTERFACE_2_COLOR | default('BIZ_INTERNET') }}
  exit
  exit
 !
-ip route 0.0.0.0 0.0.0.0 {{ WAN_INTERFACE_1_GW_IP }}
-ip route 0.0.0.0 0.0.0.0 {{ WAN_INTERFACE_2_GW_IP }}
+ip route 0.0.0.0 0.0.0.0 {{ WAN_INTERFACE_1_GW_IP | default('11.1.1.1') }}
+ip route 0.0.0.0 0.0.0.0 {{ WAN_INTERFACE_2_GW_IP | default('12.1.1.1') }}
 !
 ip domain lookup
-ip name-server {{ DNS_SERVER1_IP }} {{ DNS_SERVER2_IP }}
+ip name-server {{ DNS_SERVER1_IP | default('4.2.2.2') }} {{ DNS_SERVER2_IP | default('8.8.8.8') }}
 !
-router bgp {{WAN_1_BGP_ASN}}
+router bgp {{WAN_1_BGP_ASN | default('4321')}}
  bgp log-neighbor-changes
  no synchronization
  no auto-summary
- router-id {{LAN_INTERFACE_1_IP}}
- neighbor {{WAN_INTERFACE_1_GW_IP}} remote-as {{WAN_1_BGP_REMOTE_ASN}}
+ router-id {{ LAN_INTERFACE_1_IP | default('192.168.1.100') }}
+ neighbor {{WAN_INTERFACE_1_GW_IP | default('11.1.1.1') }} remote-as {{WAN_1_BGP_REMOTE_ASN | default('2932') }}
 !
-

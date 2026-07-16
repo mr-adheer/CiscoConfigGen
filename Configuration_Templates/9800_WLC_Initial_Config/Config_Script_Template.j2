@@ -1,6 +1,6 @@
-!================= {{ DEVICE_TYPE }} CONFIG =============================
-!   {{ DEVICE_MODEL }} CONFIGURAITON SCRIPT FOR {{ORG_NAME }}
-!   BRANCH NAME = {{ BRANCH_NAME }} , BRANCH ID = {{ BRANCH_ID }}
+!================= {{ DEVICE_TYPE | default('9800_WLC') }} CONFIG =============================
+!   {{ DEVICE_MODEL | default('9800') }} CONFIGURAITON SCRIPT FOR {{ORG_NAME | default('CLIENT_NAME') }}
+!   BRANCH NAME = {{ BRANCH_NAME | default('BLR') }}} , BRANCH ID = {{ BRANCH_ID | default('100') }}
 !========================================================================
 !   [WLC-1]<---RP-Port--->[WCL2]
 !     ||                   ||
@@ -25,18 +25,18 @@ wr
 !
 redundancy mode sso
 !
-vlan {{ MGMT_VLAN_ID }}
+vlan {{ MGMT_VLAN_ID | default('100') }}
  name WLC-MGMT
 !
-interface Vlan {{ MGMT_VLAN_ID }}
+interface Vlan {{ MGMT_VLAN_ID | default('100') }}
  description WLC-MGMT
- ip address {{ WLC_1_MGMT_VLAN_IP }} {{ WLC_MGMT_VLAN_MASK }}
- ip address {{ WLC_1_MGMT_VLAN_IP_SEC }} {{ WLC_MGMT_VLAN_MASK }} secondary
+ ip address {{ WLC_1_MGMT_VLAN_IP | default('192.168.1.101') }} {{ WLC_MGMT_VLAN_MASK | default('255.255.255.0') }}
+ ip address {{ WLC_1_MGMT_VLAN_IP_RMI | default('192.168.1.102') }} {{ WLC_MGMT_VLAN_MASK | default('255.255.255.0') }} secondary
  no shutdown
 !
-ip route 0.0.0.0 0.0.0.0 {{ DEFAULT_ROUTE_NEXTHOP }} name DEFAULT-ROUTE
+ip route 0.0.0.0 0.0.0.0 {{ DEFAULT_ROUTE_NEXTHOP | default('192.168.1.254') }} name DEFAULT-ROUTE
 !
-wireless management interface {{ MGMT_VLAN_ID }}
+wireless management interface {{ MGMT_VLAN_ID | default('100') }}
 !
 interface range Te0/0/0-1
     description ---> TO CORE SWITCH
@@ -54,7 +54,7 @@ port-channel load-balance src-dst-mixed-ip-port
 !
 chassis 1 priority 2
 !
-redun-management interface {{ MGMT_VLAN_ID }} chassis 1 address {{ WLC_1_MGMT_VLAN_IP_SEC }} chassis 2 address {{ WLC_2_MGMT_VLAN_IP_SEC }}
+redun-management interface {{ MGMT_VLAN_ID | default('100') }} chassis 1 address {{ WLC_1_MGMT_VLAN_IP_RMI | default('192.168.1.102') }} chassis 2 address {{ WLC_2_MGMT_VLAN_IP_RMI | default('192.168.1.202') }}
 !
 wr
 !
@@ -78,18 +78,18 @@ wr
 !
 redundancy mode sso
 !
-vlan {{ MGMT_VLAN_ID }}
+vlan {{ MGMT_VLAN_ID | default('100') }}
  name WLC-MGMT
 !
-interface Vlan {{ MGMT_VLAN_ID }}
+interface Vlan {{ MGMT_VLAN_ID | default('100') }}
  description WLC-MGMT
- ip address {{ WLC_2_MGMT_VLAN_IP }} {{ WLC_MGMT_VLAN_MASK }}
- ip address {{ WLC_2_MGMT_VLAN_IP_SEC }} {{ WLC_MGMT_VLAN_MASK }} secondary
+ ip address {{ WLC_2_MGMT_VLAN_IP | default('192.168.1.201') }} {{ WLC_MGMT_VLAN_MASK | default('255.255.255.0') }}
+ ip address {{ WLC_2_MGMT_VLAN_IP_RMI | default('192.168.1.202') }} {{ WLC_MGMT_VLAN_MASK | default('255.255.255.0') }} secondary
  no shutdown
 !
-ip route 0.0.0.0 0.0.0.0 {{ MGMT_VLAN_GW }} name DEFAULT-ROUTE
+ip route 0.0.0.0 0.0.0.0 {{ MGMT_VLAN_GW | default('192.168.1.254') }} name DEFAULT-ROUTE
 !
-wireless management interface {{ MGMT_VLAN_ID }}
+wireless management interface {{ MGMT_VLAN_ID | default('100') }}
 !
 !
 interface range Te0/0/0-1
@@ -111,7 +111,7 @@ port-channel load-balance src-dst-mixed-ip-port
 chassis 1 renumber 2
 chassis 2 priority 1
 !
-redun-management interface {{ MGMT_VLAN_ID }} chassis 1 address {{ WLC_1_MGMT_VLAN_IP_SEC }} chassis 2 address {{ WLC_2_MGMT_VLAN_IP_SEC }}
+redun-management interface {{ MGMT_VLAN_ID | default('100') }} chassis 1 address {{ WLC_1_MGMT_VLAN_IP_RMI | default('192.168.1.102') }} chassis 2 address {{ WLC_2_MGMT_VLAN_IP_RMI | default('192.168.1.202') }}
 !
 wr
 !
@@ -121,7 +121,7 @@ reload
 !                                           WLC GENRLAL CONFIG
 !==============================================================================================================
 !
-hostname {{ HOSTNAME }}
+hostname {{ HOSTNAME | default('BLR_WLC') }}
 !
 service nagle
 no service pad
@@ -146,15 +146,15 @@ logging buffered size 10485760
 logging trap informational
 logging history informational
 logging snmp-authfail
-logging source-interface vlan {{ MGMT_VLAN_ID }}
-logging host {{ SYSLOG_SERVER_1_IP }} transport udp port {{ SYSLOG_SERVER_1_PORT }}
-logging host {{ SYSLOG_SERVER_2_IP }} transport udp port {{ SYSLOG_SERVER_2_PORT }}
+logging source-interface vlan {{ MGMT_VLAN_ID | default('100') }}
+logging host {{ SYSLOG_SERVER_1_IP | default('10.1.1.1') }} transport udp port {{ SYSLOG_SERVER_1_PORT | default('514') }}
+logging host {{ SYSLOG_SERVER_2_IP | default('10.2.2.2') }} transport udp port {{ SYSLOG_SERVER_2_PORT | default('514') }}
 !
 clock timezone IST 5 30
 !
 password encryption aes
 !
-key config-key password-encryption {{ AES_ENCRYPTION_KEY }}
+key config-key password-encryption {{ AES_ENCRYPTION_KEY | default('AESk3y@999') }}
 password encryption aes
 !
 aaa common-criteria policy PASSWORD_POLICY
@@ -167,31 +167,31 @@ aaa common-criteria policy PASSWORD_POLICY
  char-changes 4
 !
 ! use Type9 password encryption
-username {{ LOCAL_USERNAME_15 }} privilege 15 common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret {{ LOCAL_SECRET_15 }}
-username {{ LOCAL_USERNAME_7 }} privilege 7  common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret {{ LOCAL_SECRET_7 }}
-enable common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret level 15  {{ ENABLE_SECRET }}
+username {{ LOCAL_USERNAME_15 | default('admin') }} privilege 15 common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret {{ LOCAL_SECRET_15 | default('admin@123') }}
+username {{ LOCAL_USERNAME_7 | default('user') }} privilege 7  common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret {{ LOCAL_SECRET_7 | default('user@123') }}
+enable common-criteria-policy PASSWORD_POLICY algorithm-type scrypt secret level 15  {{ ENABLE_SECRET | default('pass@123') }}
 !
 !
-radius server RADIUS_{{ RADIUS_SRV_1_IP }}
- address ipv4 {{ RADIUS_SRV_1_IP }} auth-port 1812 acct-port 1813
+radius server RADIUS_{{ RADIUS_SRV_1_IP | default('10.1.2.2') }}
+ address ipv4 {{ RADIUS_SRV_1_IP | default('10.1.2.2') }} auth-port 1812 acct-port 1813
  timeout 4
  retransmit 3
  automate-tester username dummy ignore-acct-port probe-on
-  pac key {{ RADIUS_PSK }}
+  pac key {{ RADIUS_PSK | default('Radius_pass123') }}
 !
-radius server RADIUS_{{ RADIUS_SRV_2_IP }}
- address ipv4 {{ RADIUS_SRV_2_IP }} auth-port 1812 acct-port 1813
+radius server RADIUS_{{ RADIUS_SRV_2_IP | default('10.1.2.3') }}
+ address ipv4 {{ RADIUS_SRV_2_IP | default('10.1.2.3') }} auth-port 1812 acct-port 1813
  timeout 4
  retransmit 3
  automate-tester username dummy ignore-acct-port probe-on
-  pac key {{ RADIUS_PSK }}
+  pac key {{ RADIUS_PSK | default('Radius_pass123') }}
 !
-ip radius source-interface vlan {{ MGMT_VLAN_ID }}
+ip radius source-interface vlan {{ MGMT_VLAN_ID | default('100') }}
 !
 aaa group server radius RADIUS_GRP
- server name RADIUS_{{ RADIUS_SRV_1_IP }}
- server name RADIUS_{{ RADIUS_SRV_2_IP }}
- ip radius source-interface vlan {{ MGMT_VLAN_ID }}
+ server name RADIUS_{{ RADIUS_SRV_1_IP | default('10.1.2.2') }}
+ server name RADIUS_{{ RADIUS_SRV_2_IP | default('10.1.2.3') }}
+ ip radius source-interface vlan {{ MGMT_VLAN_ID | default('100') }}
  mac-delimiter colon
 !
 radius-server dead-criteria time 5 tries 3
@@ -243,7 +243,7 @@ ip ssh server algorithm hostkey rsa-sha2-512 rsa-sha2-256
 ip ssh server algorithm encryption aes256-gcm aes256-ctr
 ip ssh server algorithm mac hmac-sha2-512 hmac-sha2-256
 ip ssh server algorithm publickey ecdsa-sha2-nistp521 ecdsa-sha2-nistp384 rsa-sha2-512
-ip ssh source-interface vlan {{ MGMT_VLAN_ID }}
+ip ssh source-interface vlan {{ MGMT_VLAN_ID | default('100') }}
 
 ! If you need to revert to default encryption, use the following commands.
 ! default ip ssh server algorithm authentication
@@ -263,7 +263,7 @@ device classifier
 !
 wireless mgmt-via-wireless
 !
-ip domain name {{ DOMAIN_NAME }}
+ip domain name {{ DOMAIN_NAME | default('domain.com') }}
 !
 !
 wireless security dot1x identity-request retries 5
@@ -272,13 +272,13 @@ wireless security dot1x request retries 5
 wireless security dot1x request timeout 5
 !
 ip access-list standard SNMP_ACL
- permit host {{ SNMP_SERVER_IP_1 }} log
+ permit host {{ SNMP_SERVER_IP_1 | default('10.2.3.2') }} log
 !
-snmp-server trap-source vlan {{ MGMG_VLAN_ID }}
-snmp-server location {{ BRANCH_NAME }}
-snmp-server group {{ SNMP_V3_GROUP }} v3 priv access SNMP_ACL
-snmp-server user {{ SNMP_V3_USERNAME }} {{ SNMP_V3_GROUP }} v3 auth sha {{ SNMP_V3_KEY }} priv aes 128 {{ snmp_v3_key }}
-snmp-server host {{ SNMP_SERVER_IP_1 }} version 3 priv {{ SNMP_V3_USERNAME }}
+snmp-server trap-source vlan {{ MGMG_VLAN_ID | default('100') }}
+snmp-server location {{ BRANCH_NAME | default('blr') }}
+snmp-server group {{ SNMP_V3_GROUP | default('snmpgrp') }} v3 priv access SNMP_ACL
+snmp-server user {{ SNMP_V3_USERNAME | default('snmpuser') }} {{ SNMP_V3_GROUP | default('snmpgrp') }} v3 auth sha {{ SNMP_V3_AUTH_KEY | default('snmpauth_key') }} priv aes 128 {{ SNMP_V3_PRIV_KEY | default('snmpPriv_key') }}
+snmp-server host {{ SNMP_SERVER_IP_1 | default('10.2.3.2') }} version 3 priv {{ SNMP_V3_USERNAME | default('snmpuser') }}
 !
 no ip http server
 ip http secure-server
@@ -286,7 +286,7 @@ ip http authentication local
 ! === or ====
 ip http authentication aaa login-authentication TACACS_AUTHEN
 ip http authentication aaa exec-authorization TACACS_AUTHZ
-ip http client source-interface {{ MGMT_VLAN_ID }}
+ip http client source-interface {{ MGMT_VLAN_ID | default('100') }}
 !
 ip access-list standard MGMT_ACL
  10 permit 10.0.0.0 0.255.255.255 log
@@ -296,7 +296,7 @@ ip access-list standard MGMT_ACL
 !
 ip http access-class ipv4 MGMT_ACL
 !
-ip tacacs source-interface vlan {{ MGMT_VLAN_ID }}
+ip tacacs source-interface vlan {{ MGMT_VLAN_ID | default('100') }}
 !
 archive
  log config
@@ -371,7 +371,7 @@ banner login ^
 |                        READ BEFORE PROCEEDING
 |
 |
-|         > THIS SYSTEM IS THE PROPERTY OF {{ ORG_NAME }}.
+|         > THIS SYSTEM IS THE PROPERTY OF {{ ORG_NAME | default('CLIENT_NAME') }}.
 |
 |         > ACCESS TO THIS SYSTEM IS FOR AUTHZISED USERS ONLY AND
 |           UNAUTHZIZED ACCESS IS PROHIBITED.
@@ -388,12 +388,12 @@ banner login ^
 ^
 !
 ntp access-group peer NTP_ACL
-ntp server {{ NTP_SERVER_IP_1 }} source vlan {{ MGMT_VLAN_ID }}
-ntp server {{ NTP_SERVER_IP_2 }} source vlan {{ MGMT_VLAN_ID }}
+ntp server {{ NTP_SERVER_IP_1 | default('10.4.3.2') }} source vlan {{ MGMT_VLAN_ID | default('100') }}
+ntp server {{ NTP_SERVER_IP_2 | default('10.4.5.6') }} source vlan {{ MGMT_VLAN_ID | default('100') }}
 !
 access-list standard NTP_ACL
- 10 permit ip {{ NTP_SERVER_IP_1 }}
- 20 permit ip {{ NTP_SERVER_IP_2 }}
+ 10 permit ip {{ NTP_SERVER_IP_1 | default('10.4.3.2') }}
+ 20 permit ip {{ NTP_SERVER_IP_2 | default('10.4.5.6') }}
  100 deny any
 !
 
@@ -408,22 +408,22 @@ parameter-map type webauth global
 !========================================================================================================
 !                                         TACACS+
 !========================================================================================================
-tacacs server TACACS_{{ TACACS_SRV_1_IP }}
- address ipv4 {{ TACACS_SRV_1_IP }}
- key {{ TACACS_PSK }}
+tacacs server TACACS_{{ TACACS_SRV_1_IP | default('10.5.6.7') }}
+ address ipv4 {{ TACACS_SRV_1_IP | default('10.5.6.7') }}
+ key {{ TACACS_PSK | default('tacacs_pass') }}
  timeout 4
 !
-tacacs server TACACS_{{ TACACS_SRV_2_IP }}
- address ipv4 {{ TACACS_SRV_2_IP }}
- key {{ TACACS_PSK }}
+tacacs server TACACS_{{ TACACS_SRV_2_IP | default('10.5.6.8') }}
+ address ipv4 {{ TACACS_SRV_2_IP | default('10.5.6.8') }}
+ key {{ TACACS_PSK | default('tacacs_pass') }}
  timeout 4
 !
 !
 aaa group server tacacs+ TACACS_GRP
- server name TACACS_{{ TACACS_SRV_1_IP }}
- server name TACACS_{{ TACACS_SRV_2_IP }}
+ server name TACACS_{{ TACACS_SRV_1_IP | default('10.5.6.7') }}
+ server name TACACS_{{ TACACS_SRV_2_IP | default('10.5.6.8') }}
 
-ip tacacs source-interface vlan {{ MGMT_VLAN_ID }}
+ip tacacs source-interface vlan {{ MGMT_VLAN_ID | default('100') }}
 !
 aaa authentication login default local
 aaa authentication login TACACS_AUTHEN group TACACS_GRP local
